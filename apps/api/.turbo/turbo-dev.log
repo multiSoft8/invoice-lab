@@ -2,9 +2,43 @@
 > @invoice-lab/api@0.1.0 dev /home/cristian/Projects/EInvoicing/invoice-lab/apps/api
 > tsx watch src/index.ts
 
-(node:172807) [FSTDEP011] DeprecationWarning: Variadic listen method is deprecated. Please use ".listen(optionsObject)" instead. The variadic signature will be removed in `fastify@5`.
+(node:193131) [FSTDEP011] DeprecationWarning: Variadic listen method is deprecated. Please use ".listen(optionsObject)" instead. The variadic signature will be removed in `fastify@5`.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-{"level":30,"time":1759675632146,"pid":172807,"hostname":"Laptop","msg":"Server listening at http://0.0.0.0:4000"}
-{"level":30,"time":1759675632147,"pid":172807,"hostname":"Laptop","msg":"API on http://localhost:4000"}
-{"level":30,"time":1759675646061,"pid":172807,"hostname":"Laptop","reqId":"req-1","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":35964},"msg":"incoming request"}
-{"level":30,"time":1759675646084,"pid":172807,"hostname":"Laptop","reqId":"req-1","res":{"statusCode":200},"responseTime":21.498686999082565,"msg":"request completed"}
+{"level":30,"time":1759681310801,"pid":193131,"hostname":"Laptop","msg":"Server listening at http://0.0.0.0:4000"}
+{"level":30,"time":1759681310802,"pid":193131,"hostname":"Laptop","msg":"API on http://localhost:4000"}
+{"level":30,"time":1759681318351,"pid":193131,"hostname":"Laptop","reqId":"req-1","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":39650},"msg":"incoming request"}
+{"level":30,"time":1759681318356,"pid":193131,"hostname":"Laptop","reqId":"req-1","res":{"statusCode":200},"responseTime":3.786214992403984,"msg":"request completed"}
+{"level":30,"time":1759681326718,"pid":193131,"hostname":"Laptop","reqId":"req-2","req":{"method":"OPTIONS","url":"/files/CristianNicoara-CV-2025-Oct.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":39650},"msg":"incoming request"}
+{"level":30,"time":1759681326720,"pid":193131,"hostname":"Laptop","reqId":"req-2","res":{"statusCode":204},"responseTime":1.388288989663124,"msg":"request completed"}
+{"level":30,"time":1759681326722,"pid":193131,"hostname":"Laptop","reqId":"req-3","req":{"method":"DELETE","url":"/files/CristianNicoara-CV-2025-Oct.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":39650},"msg":"incoming request"}
+{"level":30,"time":1759681326723,"pid":193131,"hostname":"Laptop","reqId":"req-3","res":{"statusCode":200},"responseTime":1.0272719860076904,"msg":"request completed"}
+{"level":30,"time":1759681326727,"pid":193131,"hostname":"Laptop","reqId":"req-4","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":39650},"msg":"incoming request"}
+{"level":30,"time":1759681326728,"pid":193131,"hostname":"Laptop","reqId":"req-4","res":{"statusCode":200},"responseTime":0.7972519993782043,"msg":"request completed"}
+{"level":30,"time":1759681442992,"pid":193131,"hostname":"Laptop","reqId":"req-5","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681442992,"pid":193131,"hostname":"Laptop","reqId":"req-5","res":{"statusCode":200},"responseTime":0.4719720035791397,"msg":"request completed"}
+{"level":30,"time":1759681474078,"pid":193131,"hostname":"Laptop","reqId":"req-6","req":{"method":"OPTIONS","url":"/files/7C.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681474079,"pid":193131,"hostname":"Laptop","reqId":"req-6","res":{"statusCode":204},"responseTime":0.5436509996652603,"msg":"request completed"}
+{"level":30,"time":1759681474082,"pid":193131,"hostname":"Laptop","reqId":"req-7","req":{"method":"DELETE","url":"/files/7C.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681474083,"pid":193131,"hostname":"Laptop","reqId":"req-7","res":{"statusCode":200},"responseTime":0.6782430112361908,"msg":"request completed"}
+{"level":30,"time":1759681474086,"pid":193131,"hostname":"Laptop","reqId":"req-8","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681474088,"pid":193131,"hostname":"Laptop","reqId":"req-8","res":{"statusCode":200},"responseTime":1.2208610028028488,"msg":"request completed"}
+{"level":30,"time":1759681476076,"pid":193131,"hostname":"Laptop","reqId":"req-9","req":{"method":"OPTIONS","url":"/files/CristianNicoara-CV.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681476077,"pid":193131,"hostname":"Laptop","reqId":"req-9","res":{"statusCode":204},"responseTime":0.7733189910650253,"msg":"request completed"}
+{"level":30,"time":1759681476079,"pid":193131,"hostname":"Laptop","reqId":"req-a","req":{"method":"DELETE","url":"/files/CristianNicoara-CV.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681476080,"pid":193131,"hostname":"Laptop","reqId":"req-a","res":{"statusCode":200},"responseTime":1.2149649858474731,"msg":"request completed"}
+{"level":30,"time":1759681476085,"pid":193131,"hostname":"Laptop","reqId":"req-b","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681476086,"pid":193131,"hostname":"Laptop","reqId":"req-b","res":{"statusCode":200},"responseTime":0.9880940020084381,"msg":"request completed"}
+{"level":30,"time":1759681510220,"pid":193131,"hostname":"Laptop","reqId":"req-c","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681510229,"pid":193131,"hostname":"Laptop","reqId":"req-c","res":{"statusCode":200},"responseTime":8.186749994754791,"msg":"request completed"}
+{"level":30,"time":1759681510231,"pid":193131,"hostname":"Laptop","reqId":"req-d","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681510232,"pid":193131,"hostname":"Laptop","reqId":"req-d","res":{"statusCode":200},"responseTime":0.8467539995908737,"msg":"request completed"}
+{"level":30,"time":1759681521990,"pid":193131,"hostname":"Laptop","reqId":"req-e","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681521994,"pid":193131,"hostname":"Laptop","reqId":"req-e","res":{"statusCode":200},"responseTime":3.8910380005836487,"msg":"request completed"}
+{"level":30,"time":1759681521999,"pid":193131,"hostname":"Laptop","reqId":"req-f","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681522002,"pid":193131,"hostname":"Laptop","reqId":"req-f","res":{"statusCode":200},"responseTime":2.6340180039405823,"msg":"request completed"}
+{"level":30,"time":1759681522006,"pid":193131,"hostname":"Laptop","reqId":"req-g","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681522008,"pid":193131,"hostname":"Laptop","reqId":"req-g","res":{"statusCode":200},"responseTime":1.6841969937086105,"msg":"request completed"}
+{"level":30,"time":1759681522012,"pid":193131,"hostname":"Laptop","reqId":"req-h","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681522015,"pid":193131,"hostname":"Laptop","reqId":"req-h","res":{"statusCode":200},"responseTime":2.7243449985980988,"msg":"request completed"}
+{"level":30,"time":1759681522018,"pid":193131,"hostname":"Laptop","reqId":"req-i","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":50064},"msg":"incoming request"}
+{"level":30,"time":1759681522019,"pid":193131,"hostname":"Laptop","reqId":"req-i","res":{"statusCode":200},"responseTime":0.8592890053987503,"msg":"request completed"}

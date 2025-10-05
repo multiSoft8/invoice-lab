@@ -25,3 +25,6 @@ dist
 .yarnrc
 .pnpmrc
 .turbo/cookies/*.cookie
+apps/web/.turbo/turbo-dev.log
+apps/data/*
+

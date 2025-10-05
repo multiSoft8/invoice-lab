@@ -23,3 +23,15 @@ export async function uploadFile(file: File) {
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<{ ok: true; path: string; filename: string }>;
 }
+
+export async function listFiles() {
+  const res = await fetch("http://localhost:4000/files", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to list files");
+  return res.json() as Promise<{ files: string[] }>;
+}
+
+export async function deleteFileByName(name: string) {
+  const res = await fetch(`http://localhost:4000/files/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ ok: true }>;
+}

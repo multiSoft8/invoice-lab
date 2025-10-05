@@ -45,6 +45,32 @@ app.post("/upload", async (req, reply) => {
   return { ok: true, path: filePath, filename: mp.filename };
 });
 
+app.get("/files", async () => {
+  const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+  try {
+    const entries = await fs.readdir(uploadDir, { withFileTypes: true });
+    const files = entries.filter(e => e.isFile()).map(e => e.name);
+    return { files };
+  } catch {
+    return { files: [] };
+  }
+});
+
+app.delete("/files/:name", async (req, reply) => {
+  const name = (req.params as any).name as string;
+  if (!name || name.includes("..") || name.includes("/")) {
+    return reply.code(400).send({ error: "Invalid filename" });
+  }
+  const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+  const target = path.join(uploadDir, name);
+  try {
+    await fs.unlink(target);
+    return { ok: true };
+  } catch (e: any) {
+    return reply.code(404).send({ error: "Not found" });
+  }
+});
+
 app.listen(CONFIG.port, "0.0.0.0").then(() => {
   app.log.info(`API on http://localhost:${CONFIG.port}`);
 });
