@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@invoice-lab/core": ["packages/core/src"],
+      "@invoice-lab/utils": ["packages/utils/src"],
+      "@invoice-lab/providers/apis/*": ["packages/providers/apis/*/src"],
+      "@invoice-lab/providers/llms/*": ["packages/providers/llms/*/src"]
+    }
+  }
+}

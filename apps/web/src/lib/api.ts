@@ -1,0 +1,17 @@
+export async function listProviders() {
+  const res = await fetch("http://localhost:4000/providers", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load providers");
+  return res.json() as Promise<{ providers: { id: string; kind: string; requires: string[] }[] }>;
+}
+
+export async function parseInvoice(providerId: string, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("http://localhost:4000/parse", {
+    method: "POST",
+    body: fd,
+    headers: { "X-Provider-Id": providerId },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
