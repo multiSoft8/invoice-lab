@@ -35,3 +35,45 @@ export async function deleteFileByName(name: string) {
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<{ ok: true }>;
 }
+
+// Processing method configurations
+export interface ProcessingConfig {
+  id: string;
+  name: string;
+  method: 'LLM' | 'API';
+  apiKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getConfigs() {
+  const res = await fetch("http://localhost:4000/configs", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load configurations");
+  return res.json() as Promise<{ configs: ProcessingConfig[] }>;
+}
+
+export async function createConfig(config: Omit<ProcessingConfig, 'id' | 'createdAt' | 'updatedAt'>) {
+  const res = await fetch("http://localhost:4000/configs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ ok: true; config: ProcessingConfig }>;
+}
+
+export async function updateConfig(id: string, config: Omit<ProcessingConfig, 'id' | 'createdAt' | 'updatedAt'>) {
+  const res = await fetch(`http://localhost:4000/configs/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ ok: true; config: ProcessingConfig }>;
+}
+
+export async function deleteConfig(id: string) {
+  const res = await fetch(`http://localhost:4000/configs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ ok: true }>;
+}
