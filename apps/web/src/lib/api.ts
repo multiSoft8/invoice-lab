@@ -15,3 +15,11 @@ export async function parseInvoice(providerId: string, file: File) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+export async function uploadFile(file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("http://localhost:4000/upload", { method: "POST", body: fd });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ ok: true; path: string; filename: string }>;
+}

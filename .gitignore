@@ -24,3 +24,4 @@ dist
 .npmrc
 .yarnrc
 .pnpmrc
+.turbo/cookies/*.cookie

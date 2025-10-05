@@ -19,8 +19,8 @@
      [1m✓[22m appDir
 
  [32m[1m✓[22m[39m Starting...
- [32m[1m✓[22m[39m Ready in 1347ms
+ [32m[1m✓[22m[39m Ready in 2.1s
  [37m[1m○[22m[39m Compiling / ...
- [32m[1m✓[22m[39m Compiled / in 738ms (532 modules)
- GET / [32m200[39m in 1018ms
-[?25h
+ [32m[1m✓[22m[39m Compiled / in 2.5s (546 modules)
+ GET / [32m200[39m in 3047ms
+ GET / [32m200[39m in 180ms

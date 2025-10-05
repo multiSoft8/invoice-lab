@@ -2,9 +2,9 @@
 > @invoice-lab/api@0.1.0 dev /home/cristian/Projects/EInvoicing/invoice-lab/apps/api
 > tsx watch src/index.ts
 
-(node:140979) [FSTDEP011] DeprecationWarning: Variadic listen method is deprecated. Please use ".listen(optionsObject)" instead. The variadic signature will be removed in `fastify@5`.
+(node:172807) [FSTDEP011] DeprecationWarning: Variadic listen method is deprecated. Please use ".listen(optionsObject)" instead. The variadic signature will be removed in `fastify@5`.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-{"level":30,"time":1759664981724,"pid":140979,"hostname":"Laptop","msg":"Server listening at http://0.0.0.0:4000"}
-{"level":30,"time":1759664981724,"pid":140979,"hostname":"Laptop","msg":"API on http://localhost:4000"}
-{"level":30,"time":1759664988250,"pid":140979,"hostname":"Laptop","reqId":"req-1","req":{"method":"GET","url":"/providers","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":59414},"msg":"incoming request"}
-{"level":30,"time":1759664988253,"pid":140979,"hostname":"Laptop","reqId":"req-1","res":{"statusCode":200},"responseTime":2.9151979982852936,"msg":"request completed"}
+{"level":30,"time":1759675632146,"pid":172807,"hostname":"Laptop","msg":"Server listening at http://0.0.0.0:4000"}
+{"level":30,"time":1759675632147,"pid":172807,"hostname":"Laptop","msg":"API on http://localhost:4000"}
+{"level":30,"time":1759675646061,"pid":172807,"hostname":"Laptop","reqId":"req-1","req":{"method":"POST","url":"/upload","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":35964},"msg":"incoming request"}
+{"level":30,"time":1759675646084,"pid":172807,"hostname":"Laptop","reqId":"req-1","res":{"statusCode":200},"responseTime":21.498686999082565,"msg":"request completed"}
