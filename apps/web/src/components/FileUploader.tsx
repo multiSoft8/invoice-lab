@@ -108,7 +108,10 @@ export default function FileUploader() {
 
       <section className="rounded-lg border bg-white/60 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Existing Files</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium">Existing Files</h3>
+            <span className="text-xs text-gray-600">Total: <span className="font-medium">{existing.length}</span></span>
+          </div>
           <button
             type="button"
             className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 text-sm shadow focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -124,6 +127,9 @@ export default function FileUploader() {
 
         {showList && (
           <div className="mt-3">
+            <div className="text-sm text-gray-700 mb-2">
+              Total files: <span className="font-medium">{existing.length}</span>
+            </div>
             <div className="mt-2 max-h-48 overflow-auto border rounded">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white">
