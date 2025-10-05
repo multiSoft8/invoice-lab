@@ -2,15 +2,11 @@
 > @invoice-lab/api@0.1.0 dev /home/cristian/Projects/EInvoicing/invoice-lab/apps/api
 > tsx watch src/index.ts
 
-(node:209119) [FSTDEP011] DeprecationWarning: Variadic listen method is deprecated. Please use ".listen(optionsObject)" instead. The variadic signature will be removed in `fastify@5`.
+(node:211035) [FSTDEP011] DeprecationWarning: Variadic listen method is deprecated. Please use ".listen(optionsObject)" instead. The variadic signature will be removed in `fastify@5`.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-{"level":30,"time":1759685086886,"pid":209119,"hostname":"Laptop","msg":"Server listening at http://0.0.0.0:4000"}
-{"level":30,"time":1759685086886,"pid":209119,"hostname":"Laptop","msg":"API on http://localhost:4000"}
-{"level":30,"time":1759685104271,"pid":209119,"hostname":"Laptop","reqId":"req-1","req":{"method":"GET","url":"/files/Bolt-AirportToHotel-Invoice.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":34656},"msg":"incoming request"}
-{"level":30,"time":1759685104277,"pid":209119,"hostname":"Laptop","reqId":"req-1","res":{"statusCode":200},"responseTime":5.014711007475853,"msg":"request completed"}
-{"level":30,"time":1759685108342,"pid":209119,"hostname":"Laptop","reqId":"req-2","req":{"method":"GET","url":"/files/Bolt-HomeToAirportSibiu-Invoice.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":34656},"msg":"incoming request"}
-{"level":30,"time":1759685108344,"pid":209119,"hostname":"Laptop","reqId":"req-2","res":{"statusCode":200},"responseTime":2.0602920055389404,"msg":"request completed"}
-{"level":30,"time":1759685185714,"pid":209119,"hostname":"Laptop","reqId":"req-3","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":49240},"msg":"incoming request"}
-{"level":30,"time":1759685185715,"pid":209119,"hostname":"Laptop","reqId":"req-3","res":{"statusCode":200},"responseTime":1.0873139947652817,"msg":"request completed"}
-{"level":30,"time":1759685256079,"pid":209119,"hostname":"Laptop","reqId":"req-4","req":{"method":"GET","url":"/files/Bolt-HotelToTheOfficeDay1-Invoice.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":44490},"msg":"incoming request"}
-{"level":30,"time":1759685256080,"pid":209119,"hostname":"Laptop","reqId":"req-4","res":{"statusCode":200},"responseTime":1.2678780108690262,"msg":"request completed"}
+{"level":30,"time":1759685473272,"pid":211035,"hostname":"Laptop","msg":"Server listening at http://0.0.0.0:4000"}
+{"level":30,"time":1759685473272,"pid":211035,"hostname":"Laptop","msg":"API on http://localhost:4000"}
+{"level":30,"time":1759685479228,"pid":211035,"hostname":"Laptop","reqId":"req-1","req":{"method":"GET","url":"/files","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":48674},"msg":"incoming request"}
+{"level":30,"time":1759685479233,"pid":211035,"hostname":"Laptop","reqId":"req-1","res":{"statusCode":200},"responseTime":3.607694000005722,"msg":"request completed"}
+{"level":30,"time":1759685485269,"pid":211035,"hostname":"Laptop","reqId":"req-2","req":{"method":"GET","url":"/files/Bolt-HotelToTheOfficeDay2-Invoice.pdf","hostname":"localhost:4000","remoteAddress":"127.0.0.1","remotePort":43290},"msg":"incoming request"}
+{"level":30,"time":1759685485272,"pid":211035,"hostname":"Laptop","reqId":"req-2","res":{"statusCode":200},"responseTime":2.2809859961271286,"msg":"request completed"}

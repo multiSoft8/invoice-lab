@@ -91,12 +91,36 @@ export default function FileUploader() {
 
         {showControls && (
           <div className="mt-3 space-y-3">
-            <div>
-              <input type="file" multiple accept="application/pdf, image/*, .png,.jpg,.jpeg,.webp,.tiff,.tif,.gif,.bmp,.heic,.heif,.svg,.txt,.csv,.json" onChange={onPick} />
+            <div className="flex items-center gap-3">
+              <input
+                id="file-input"
+                type="file"
+                multiple
+                accept="application/pdf, image/*, .png,.jpg,.jpeg,.webp,.tiff,.tif,.gif,.bmp,.heic,.heif,.svg,.txt,.csv,.json"
+                onChange={onPick}
+                className="sr-only"
+              />
+              <label
+                htmlFor="file-input"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 text-sm shadow cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 opacity-90">
+                  <path d="M16.5 6.75v8.25a4.5 4.5 0 1 1-9 0V5.25a3 3 0 0 1 6 0v8.25a1.5 1.5 0 1 1-3 0V6.75a.75.75 0 1 1 1.5 0v6.75a.75.75 0 1 0 1.5 0V5.25a4.5 4.5 0 0 0-9 0v9.75a6 6 0 1 0 12 0V6.75a.75.75 0 1 0-1.5 0Z"/>
+                </svg>
+                <span>Choose Files</span>
+              </label>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={onUpload} disabled={uploading || files.length===0} className="rounded bg-black text-white px-4 py-2">
-                {uploading ? 'Uploading…' : 'Upload to local storage'}
+              <button
+                onClick={onUpload}
+                disabled={uploading || files.length===0}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-green-600 hover:bg-green-500 text-white px-4 py-2 text-sm shadow focus:outline-none focus:ring-2 focus:ring-green-400 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 opacity-90">
+                  <path d="M12 3a1 1 0 0 1 1 1v8.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L11 12.586V4a1 1 0 0 1 1-1Z"/>
+                  <path d="M5 15a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/>
+                </svg>
+                <span>{uploading ? 'Uploading…' : 'Upload to local storage'}</span>
               </button>
               {files.length>0 && <span className="text-sm opacity-75">{files.length} selected</span>}
             </div>
