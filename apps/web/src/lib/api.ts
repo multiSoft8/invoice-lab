@@ -40,8 +40,9 @@ export async function deleteFileByName(name: string) {
 export interface ProcessingConfig {
   id: string;
   name: string;
-  method: 'LLM' | 'API';
+  method: 'LLM' | 'API' | 'MCP';
   apiKey: string;
+  url: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,4 +77,25 @@ export async function deleteConfig(id: string) {
   const res = await fetch(`http://localhost:4000/configs/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<{ ok: true }>;
+}
+
+// Connection testing
+export interface ConnectionTestResult {
+  success: boolean;
+  method: 'LLM' | 'API' | 'MCP';
+  error: string | null;
+  duration: number;
+  timestamp: string;
+  details: {
+    statusCode?: number;
+    errorType?: 'auth' | 'network' | 'timeout' | 'invalid_url' | 'unknown';
+  };
+}
+
+export async function testConnection(configId: string) {
+  const res = await fetch(`http://localhost:4000/configs/${encodeURIComponent(configId)}/test-connection`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<ConnectionTestResult>;
 }

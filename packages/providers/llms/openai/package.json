@@ -6,6 +6,7 @@
   "main": "src/index.ts",
   "dependencies": {
     "@invoice-lab/core": "workspace:*",
+    "openai": "^4.67.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
