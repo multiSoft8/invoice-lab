@@ -1,6 +1,7 @@
 "use client";
 import FileUploader from "../components/FileUploader";
 import ProcessingMethod from "../components/ProcessingMethod";
+import CompareOutputs from "../components/CompareOutputs";
 import { useState } from "react";
 
 export default function Page() {
@@ -36,7 +37,7 @@ export default function Page() {
         )}
       </section>
 
-      {/* 3) Compare section (placeholder) */}
+      {/* 3) Compare section */}
       <section className="rounded border p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Compare Outputs</h2>
@@ -45,7 +46,7 @@ export default function Page() {
           </button>
         </div>
         {open.compare && (
-          <p className="text-sm opacity-75">Here you’ll compare results from different methods on the same invoice.</p>
+          <CompareOutputs />
         )}
       </section>
 

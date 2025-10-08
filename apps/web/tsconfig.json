@@ -16,7 +16,8 @@
       "dom.iterable",
       "esnext"
     ],
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": []
   },
   "include": [
     "**/*.ts",
