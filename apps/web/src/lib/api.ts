@@ -43,6 +43,7 @@ export interface ProcessingConfig {
   method: 'LLM' | 'API' | 'MCP';
   apiKey: string;
   url: string;
+  timeout?: number;  // Timeout in seconds (optional, defaults to 60 for MCP)
   createdAt: string;
   updatedAt: string;
 }
@@ -98,4 +99,102 @@ export async function testConnection(configId: string) {
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<ConnectionTestResult>;
+}
+
+// MCP Processing
+export interface ClientInfo {
+  businessId: string;  // VAT123456789 format
+  name: string;         // Client business name
+  country: string;      // ISO country code (FI, SE, NO, US, etc.)
+}
+
+export interface MCPProcessRequest {
+  filename: string;
+  configId: string;
+  clientInfo: ClientInfo;
+}
+
+export interface MCPProcessResponse {
+  success: boolean;
+  processingId: string;
+  result?: any;
+  error?: string;
+  duration?: number;
+  timestamp: string;
+}
+
+export interface ProcessingResult {
+  id: string;
+  filename: string;
+  configId: string;
+  clientInfo: ClientInfo;
+  status: 'processing' | 'completed' | 'failed';
+  result?: any;
+  error?: string;
+  createdAt: string;
+  completedAt?: string;
+  duration?: number;
+  mcpResponse?: any;
+}
+
+export async function processInvoiceWithMCP(request: MCPProcessRequest) {
+  const res = await fetch("http://localhost:4000/process-mcp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<MCPProcessResponse>;
+}
+
+export async function getProcessingResult(id: string) {
+  const res = await fetch(`http://localhost:4000/results/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ result: ProcessingResult }>;
+}
+
+export async function getProcessingResultsByFilename(filename: string) {
+  const res = await fetch(`http://localhost:4000/results/filename/${encodeURIComponent(filename)}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ results: ProcessingResult[] }>;
+}
+
+export async function getAllProcessingResults() {
+  const res = await fetch("http://localhost:4000/results");
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ results: ProcessingResult[] }>;
+}
+
+export async function deleteProcessingResult(id: string) {
+  const res = await fetch(`http://localhost:4000/results/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ success: boolean }>;
+}
+
+// Client Information Management
+export async function getClientInfo() {
+  const res = await fetch("http://localhost:4000/client-info", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load client information");
+  const data = await res.json() as Promise<{ clientInfo: ClientInfo | null }>;
+  return data.clientInfo;
+}
+
+export async function updateClientInfo(clientInfo: ClientInfo) {
+  const res = await fetch("http://localhost:4000/client-info", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(clientInfo),
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText);
+  }
+  const data = await res.json() as Promise<{ ok: boolean; clientInfo: ClientInfo }>;
+  return data.clientInfo;
+}
+
+export async function clearClientInfo() {
+  const res = await fetch("http://localhost:4000/client-info", { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<{ ok: boolean }>;
 }

@@ -4,7 +4,7 @@ import { ProcessingConfig, getConfigs, createConfig, updateConfig, deleteConfig,
 
 export default function ProcessingMethod() {
   const [configs, setConfigs] = useState<ProcessingConfig[]>([]);
-  const [formData, setFormData] = useState({ name: '', method: 'LLM' as 'LLM' | 'API' | 'MCP', apiKey: '', url: '' });
+  const [formData, setFormData] = useState({ name: '', method: 'LLM' as 'LLM' | 'API' | 'MCP', apiKey: '', url: '', timeout: 60 });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +33,12 @@ export default function ProcessingMethod() {
       setError('Please fill in all fields');
       return;
     }
+    
+    // Validate timeout for MCP methods
+    if (formData.method === 'MCP' && (formData.timeout < 10 || formData.timeout > 300)) {
+      setError('Timeout must be between 10 and 300 seconds');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -46,7 +52,7 @@ export default function ProcessingMethod() {
         await createConfig(formData);
         setSuccess('Configuration created successfully');
       }
-      setFormData({ name: '', method: 'LLM' as 'LLM' | 'API' | 'MCP', apiKey: '', url: '' });
+      setFormData({ name: '', method: 'LLM' as 'LLM' | 'API' | 'MCP', apiKey: '', url: '', timeout: 60 });
       setEditingId(null);
       await refreshConfigs();
     } catch (e: any) {
@@ -57,7 +63,13 @@ export default function ProcessingMethod() {
   }
 
   function handleEdit(config: ProcessingConfig) {
-    setFormData({ name: config.name, method: config.method, apiKey: config.apiKey, url: config.url });
+    setFormData({ 
+      name: config.name, 
+      method: config.method, 
+      apiKey: config.apiKey, 
+      url: config.url,
+      timeout: config.timeout || (config.method === 'MCP' ? 60 : 30)
+    });
     setEditingId(config.id);
   }
 
@@ -169,6 +181,25 @@ export default function ProcessingMethod() {
                 />
               </div>
 
+              {formData.method === 'MCP' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Timeout (seconds)</label>
+                  <input
+                    type="number"
+                    value={formData.timeout}
+                    onChange={(e) => setFormData({ ...formData, timeout: parseInt(e.target.value) || 60 })}
+                    className="w-full rounded border px-3 py-2"
+                    placeholder="60"
+                    min="10"
+                    max="300"
+                    required
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Timeout for invoice processing (10-300 seconds, default: 60)
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -185,7 +216,7 @@ export default function ProcessingMethod() {
                   <button
                     type="button"
                     onClick={() => {
-                      setFormData({ name: '', method: 'LLM' as 'LLM' | 'API' | 'MCP', apiKey: '', url: '' });
+                      setFormData({ name: '', method: 'LLM' as 'LLM' | 'API' | 'MCP', apiKey: '', url: '', timeout: 60 });
                       setEditingId(null);
                     }}
                     className="rounded border px-4 py-2 text-sm"
@@ -241,6 +272,7 @@ export default function ProcessingMethod() {
                       <th className="text-left font-semibold p-3">Method Type</th>
                       <th className="text-left font-semibold p-3">API Key</th>
                       <th className="text-left font-semibold p-3">URL</th>
+                      <th className="text-center font-semibold p-3">Timeout</th>
                       <th className="text-center font-semibold p-3">Integration Basic Test OK</th>
                       <th className="text-right font-semibold p-3">Actions</th>
                     </tr>
@@ -260,6 +292,9 @@ export default function ProcessingMethod() {
                         </td>
                         <td className="p-3 font-mono text-gray-600">{maskApiKey(config.apiKey)}</td>
                         <td className="p-3 text-gray-600 max-w-xs truncate" title={config.url}>{config.url}</td>
+                        <td className="p-3 text-center text-gray-600">
+                          {config.method === 'MCP' && config.timeout ? `${config.timeout}s` : '-'}
+                        </td>
                         <td className="p-3 text-center">
                           <button
                             onClick={() => handleTestConnection(config.id)}

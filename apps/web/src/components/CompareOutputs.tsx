@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { listFiles, getConfigs, ProcessingConfig } from '../lib/api';
+import { listFiles, getConfigs, ProcessingConfig, processInvoiceWithMCP, ClientInfo, ProcessingResult, getClientInfo } from '../lib/api';
+import ClientInfoForm from './ClientInfoForm';
+import ResultDetailModal from './ResultDetailModal';
 
 export default function CompareOutputs() {
   const [invoices, setInvoices] = useState<string[]>([]);
@@ -14,19 +16,29 @@ export default function CompareOutputs() {
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number }>({ width: 960, height: 560 });
   const resizeStartMouse = useRef<{ x: number; y: number } | null>(null);
   const resizeStartSize = useRef<{ width: number; height: number } | null>(null);
+  const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [processingStates, setProcessingStates] = useState<Record<string, Record<string, 'idle' | 'processing' | 'completed' | 'error'>>>({});
+  const [processingResults, setProcessingResults] = useState<Record<string, Record<string, ProcessingResult>>>({});
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
 
-  // Load invoices and configurations
+  // Load invoices, configurations, and client info
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
       try {
-        const [filesResponse, configsResponse] = await Promise.all([
+        const [filesResponse, configsResponse, savedClientInfo] = await Promise.all([
           listFiles(),
-          getConfigs()
+          getConfigs(),
+          getClientInfo().catch(() => null) // Don't fail if client info doesn't exist
         ]);
         setInvoices(filesResponse.files);
         setConfigs(configsResponse.configs);
+        
+        // Set client info if it exists
+        if (savedClientInfo) {
+          setClientInfo(savedClientInfo);
+        }
         
         // Initialize selected methods for each invoice
         const initialSelections: Record<string, string[]> = {};
@@ -84,15 +96,105 @@ export default function CompareOutputs() {
   }
 
   // Handle process invoice button click
-  function handleProcessInvoice(filename: string) {
+  async function handleProcessInvoice(filename: string) {
     const selected = selectedMethods[filename] || [];
     if (selected.length === 0) {
       alert('Please select at least one processing method');
       return;
     }
     
-    console.log(`Processing ${filename} with methods:`, selected);
-    // TODO: Implement actual processing logic
+    // Check if any MCP methods are selected and client info is required
+    const mcpConfigs = configs.filter(config => config.method === 'MCP' && selected.includes(config.id));
+    if (mcpConfigs.length > 0 && !clientInfo) {
+      alert('Client information is required for MCP processing. Please fill in the client information form.');
+      return;
+    }
+    
+    // Process each selected method
+    for (const configId of selected) {
+      const config = configs.find(c => c.id === configId);
+      if (!config) continue;
+      
+      // Set processing state
+      setProcessingStates(prev => ({
+        ...prev,
+        [filename]: {
+          ...prev[filename],
+          [configId]: 'processing'
+        }
+      }));
+      
+      try {
+        if (config.method === 'MCP') {
+          // Process with MCP
+          const response = await processInvoiceWithMCP({
+            filename,
+            configId,
+            clientInfo: clientInfo!
+          });
+          
+          if (response.success) {
+            // Create processing result
+            const result: ProcessingResult = {
+              id: response.processingId,
+              filename,
+              configId,
+              clientInfo: clientInfo!,
+              status: 'completed',
+              result: response.result,
+              createdAt: new Date().toISOString(),
+              completedAt: response.timestamp,
+              duration: response.duration
+            };
+            
+            // Update states
+            setProcessingStates(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: 'completed'
+              }
+            }));
+            
+            setProcessingResults(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: result
+              }
+            }));
+          } else {
+            throw new Error(response.error || 'MCP processing failed');
+          }
+        } else {
+          // For non-MCP methods, just log for now
+          console.log(`Processing ${filename} with ${config.method} method:`, config.name);
+          
+          // Simulate processing for non-MCP methods
+          setTimeout(() => {
+            setProcessingStates(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: 'completed'
+              }
+            }));
+          }, 2000);
+        }
+      } catch (error: any) {
+        console.error(`Error processing ${filename} with ${config.name}:`, error);
+        
+        setProcessingStates(prev => ({
+          ...prev,
+          [filename]: {
+            ...prev[filename],
+            [configId]: 'error'
+          }
+        }));
+        
+        setError(`Failed to process ${filename} with ${config.name}: ${error.message}`);
+      }
+    }
   }
 
   // Check if any methods are selected for an invoice
@@ -100,9 +202,30 @@ export default function CompareOutputs() {
     return (selectedMethods[filename] || []).length > 0;
   }
 
+  // Get processing state for a specific invoice and method
+  function getProcessingState(filename: string, configId: string): 'idle' | 'processing' | 'completed' | 'error' {
+    return processingStates[filename]?.[configId] || 'idle';
+  }
+
+  // Get processing result for a specific invoice and method
+  function getProcessingResult(filename: string, configId: string): ProcessingResult | null {
+    return processingResults[filename]?.[configId] || null;
+  }
+
+  // Check if any MCP methods are selected
+  function hasMCPMethodsSelected(filename: string): boolean {
+    const selected = selectedMethods[filename] || [];
+    return configs.some(config => config.method === 'MCP' && selected.includes(config.id));
+  }
+
   // Handle invoice preview click
   function handleInvoicePreview(filename: string) {
     setPreviewInvoice(filename);
+  }
+
+  // Handle viewing result details
+  function handleViewResult(resultId: string) {
+    setSelectedResultId(resultId);
   }
 
   // Get file type for display and preview
@@ -140,12 +263,18 @@ export default function CompareOutputs() {
     setLoading(true);
     setError(null);
     try {
-      const [filesResponse, configsResponse] = await Promise.all([
+      const [filesResponse, configsResponse, savedClientInfo] = await Promise.all([
         listFiles(),
-        getConfigs()
+        getConfigs(),
+        getClientInfo().catch(() => null) // Don't fail if client info doesn't exist
       ]);
       setInvoices(filesResponse.files);
       setConfigs(configsResponse.configs);
+      
+      // Update client info if it exists
+      if (savedClientInfo) {
+        setClientInfo(savedClientInfo);
+      }
       
       // Initialize selected methods for each invoice
       const initialSelections: Record<string, string[]> = {};
@@ -162,6 +291,12 @@ export default function CompareOutputs() {
 
   return (
     <div className="space-y-4">
+      {/* Client Information Form */}
+      <ClientInfoForm 
+        onClientInfoChange={setClientInfo}
+        initialClientInfo={clientInfo || undefined}
+      />
+
       {/* Summary and controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -273,36 +408,127 @@ export default function CompareOutputs() {
                       </td>
                       
                       {/* Processing Method Columns */}
-                      {configs.map((config) => (
-                        <td key={config.id} className="p-3 text-center">
-                          <label className="inline-flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={(selectedMethods[filename] || []).includes(config.id)}
-                              onChange={(e) => handleMethodSelection(filename, config.id, e.target.checked)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="ml-2 text-xs text-gray-600">Select</span>
-                          </label>
-                        </td>
-                      ))}
+                      {configs.map((config) => {
+                        const processingState = getProcessingState(filename, config.id);
+                        const processingResult = getProcessingResult(filename, config.id);
+                        
+                        return (
+                          <td key={config.id} className="p-3 text-center">
+                            <div className="space-y-2">
+                              {/* Selection checkbox */}
+                              <label className="inline-flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={(selectedMethods[filename] || []).includes(config.id)}
+                                  onChange={(e) => handleMethodSelection(filename, config.id, e.target.checked)}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-xs text-gray-600">Select</span>
+                              </label>
+                              
+                              {/* Processing status */}
+                              {processingState !== 'idle' && (
+                                <div className="text-xs">
+                                  {processingState === 'processing' && (
+                                    <div className="flex items-center justify-center gap-1 text-blue-600">
+                                      <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                      </svg>
+                                      Processing...
+                                    </div>
+                                  )}
+                                  {processingState === 'completed' && (
+                                    <div className="flex items-center justify-center gap-1 text-green-600">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                        <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
+                                      </svg>
+                                      Completed
+                                    </div>
+                                  )}
+                                  {processingState === 'error' && (
+                                    <div className="flex items-center justify-center gap-1 text-red-600">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                        <path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" />
+                                      </svg>
+                                      Error
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Processing result info */}
+                              {processingResult && (
+                                <div className="text-xs text-gray-500">
+                                  <div>ID: {processingResult.id.slice(0, 8)}...</div>
+                                  {processingResult.duration && (
+                                    <div>{processingResult.duration}ms</div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* View Results Link */}
+                              {processingState === 'completed' && processingResult && (
+                                <button
+                                  onClick={() => handleViewResult(processingResult.id)}
+                                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded px-1 py-0.5"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                                    <path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 0 1 0-1.113ZM17.25 12a5.25 5.25 0 1 1-10.5 0 5.25 5.25 0 0 1 10.5 0Z" clipRule="evenodd" />
+                                  </svg>
+                                  View Results
+                                </button>
+                              )}
+                              
+                              {/* View Error Details Link */}
+                              {processingState === 'error' && processingResult && (
+                                <button
+                                  onClick={() => handleViewResult(processingResult.id)}
+                                  className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-800 hover:underline focus:outline-none focus:ring-2 focus:ring-red-400 rounded px-1 py-0.5"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
+                                  </svg>
+                                  View Error
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
                       
                       {/* Process Invoice Column */}
                       <td className="p-3 text-center">
-                        <button
-                          onClick={() => handleProcessInvoice(filename)}
-                          disabled={!hasSelectedMethods(filename)}
-                          className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm shadow focus:outline-none focus:ring-2 ${
-                            hasSelectedMethods(filename)
-                              ? 'bg-green-600 hover:bg-green-500 text-white focus:ring-green-400'
-                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          }`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                            <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" />
-                          </svg>
-                          Process
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => handleProcessInvoice(filename)}
+                            disabled={!hasSelectedMethods(filename) || (hasMCPMethodsSelected(filename) && !clientInfo)}
+                            className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm shadow focus:outline-none focus:ring-2 ${
+                              hasSelectedMethods(filename) && (!hasMCPMethodsSelected(filename) || clientInfo)
+                                ? 'bg-green-600 hover:bg-green-500 text-white focus:ring-green-400'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                              <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" />
+                            </svg>
+                            Process
+                          </button>
+                          
+                          {/* Status indicators */}
+                          {hasMCPMethodsSelected(filename) && !clientInfo && (
+                            <div className="text-xs text-amber-600">
+                              Client info required
+                            </div>
+                          )}
+                          
+                          {!hasSelectedMethods(filename) && (
+                            <div className="text-xs text-gray-500">
+                              Select methods first
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -348,6 +574,12 @@ export default function CompareOutputs() {
           </div>
         </div>
       )}
+
+      {/* Result Detail Modal */}
+      <ResultDetailModal 
+        resultId={selectedResultId}
+        onClose={() => setSelectedResultId(null)}
+      />
     </div>
   );
 }

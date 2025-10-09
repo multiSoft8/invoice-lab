@@ -6,6 +6,8 @@ import { createReadStream, promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { CONFIG } from "./config";
 import { listProviders, getProvider } from "./providers";
+import { MCPProcessor } from "./mcp-processor";
+import { ClientInfo } from "./mcp-client";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +16,10 @@ const __dirname = path.dirname(__filename);
 const app = Fastify({ logger: true });
 app.register(cors, { origin: true });
 app.register(multipart);
+
+// Initialize MCP processor
+const resultsDir = path.resolve(__dirname, "../../data/results");
+const mcpProcessor = new MCPProcessor(resultsDir, path.resolve(__dirname, CONFIG.uploadDir));
 
 app.get("/health", async () => ({ ok: true }));
 
@@ -100,6 +106,10 @@ app.delete("/files/:name", async (req, reply) => {
 // Processing method configurations
 const configsDir = path.resolve(__dirname, "../../data/configs");
 
+// Client information storage
+const clientDir = path.resolve(__dirname, "../../data/client");
+const clientInfoPath = path.join(clientDir, "client-info.json");
+
 app.get("/configs", async () => {
   try {
     await fs.mkdir(configsDir, { recursive: true });
@@ -119,7 +129,7 @@ app.get("/configs", async () => {
 
 app.post("/configs", async (req, reply) => {
   const body = req.body as any;
-  const { name, method, apiKey, url } = body;
+  const { name, method, apiKey, url, timeout } = body;
   
   if (!name || !method || !apiKey || !url) {
     return reply.code(400).send({ error: "Missing required fields" });
@@ -129,6 +139,11 @@ app.post("/configs", async (req, reply) => {
     return reply.code(400).send({ error: "Invalid method type" });
   }
   
+  // Validate timeout if provided
+  if (timeout !== undefined && (typeof timeout !== 'number' || timeout < 10 || timeout > 300)) {
+    return reply.code(400).send({ error: "Timeout must be a number between 10 and 300 seconds" });
+  }
+  
   const id = randomUUID();
   const config = {
     id,
@@ -136,6 +151,7 @@ app.post("/configs", async (req, reply) => {
     method,
     apiKey,
     url,
+    timeout: timeout || (method === 'MCP' ? 60 : undefined), // Default 60s for MCP
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -152,7 +168,7 @@ app.post("/configs", async (req, reply) => {
 app.put("/configs/:id", async (req, reply) => {
   const id = (req.params as any).id as string;
   const body = req.body as any;
-  const { name, method, apiKey, url } = body;
+  const { name, method, apiKey, url, timeout } = body;
   
   if (!name || !method || !apiKey || !url) {
     return reply.code(400).send({ error: "Missing required fields" });
@@ -160,6 +176,11 @@ app.put("/configs/:id", async (req, reply) => {
   
   if (!['LLM', 'API', 'MCP'].includes(method)) {
     return reply.code(400).send({ error: "Invalid method type" });
+  }
+  
+  // Validate timeout if provided
+  if (timeout !== undefined && (typeof timeout !== 'number' || timeout < 10 || timeout > 300)) {
+    return reply.code(400).send({ error: "Timeout must be a number between 10 and 300 seconds" });
   }
   
   const configPath = path.join(configsDir, `config-${id}.json`);
@@ -174,6 +195,7 @@ app.put("/configs/:id", async (req, reply) => {
       method,
       apiKey,
       url,
+      timeout: timeout !== undefined ? timeout : (method === 'MCP' ? 60 : existing.timeout),
       updatedAt: new Date().toISOString()
     };
     
@@ -193,6 +215,73 @@ app.delete("/configs/:id", async (req, reply) => {
     return { ok: true };
   } catch (e: any) {
     return reply.code(404).send({ error: "Configuration not found" });
+  }
+});
+
+// Client Information endpoints
+app.get("/client-info", async () => {
+  try {
+    await fs.mkdir(clientDir, { recursive: true });
+    const content = await fs.readFile(clientInfoPath, 'utf8');
+    const clientInfo = JSON.parse(content);
+    return { clientInfo };
+  } catch {
+    return { clientInfo: null };
+  }
+});
+
+app.put("/client-info", async (req, reply) => {
+  const body = req.body as any;
+  const { businessId, name, country } = body;
+  
+  // Validate required fields
+  if (!businessId || !name || !country) {
+    return reply.code(400).send({ error: "Missing required fields: businessId, name, country" });
+  }
+  
+  // Validate business ID format (VAT format)
+  if (!/^VAT[A-Z0-9]{8,12}$/i.test(businessId.trim())) {
+    return reply.code(400).send({ error: "Business ID must be in VAT format (e.g., VAT123456789)" });
+  }
+  
+  // Validate name length
+  if (name.trim().length < 2) {
+    return reply.code(400).send({ error: "Business name must be at least 2 characters" });
+  }
+  
+  const clientInfo = {
+    businessId: businessId.trim().toUpperCase(),
+    name: name.trim(),
+    country: country.trim(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  try {
+    await fs.mkdir(clientDir, { recursive: true });
+    
+    // Check if file exists to preserve createdAt
+    try {
+      const existingContent = await fs.readFile(clientInfoPath, 'utf8');
+      const existing = JSON.parse(existingContent);
+      clientInfo.createdAt = existing.createdAt; // Preserve original creation date
+    } catch {
+      // File doesn't exist, use new createdAt
+    }
+    
+    await fs.writeFile(clientInfoPath, JSON.stringify(clientInfo, null, 2));
+    return { ok: true, clientInfo };
+  } catch (e: any) {
+    return reply.code(500).send({ error: "Failed to save client information" });
+  }
+});
+
+app.delete("/client-info", async (req, reply) => {
+  try {
+    await fs.unlink(clientInfoPath);
+    return { ok: true };
+  } catch (e: any) {
+    return reply.code(404).send({ error: "Client information not found" });
   }
 });
 
@@ -419,6 +508,102 @@ app.post("/configs/:id/test-connection", async (req, reply) => {
     };
   } catch (e: any) {
     return reply.code(404).send({ error: "Configuration not found" });
+  }
+});
+
+// MCP Processing endpoints
+app.post("/process-mcp", async (req, reply) => {
+  const body = req.body as any;
+  const { filename, configId, clientInfo } = body;
+  
+  if (!filename || !configId || !clientInfo) {
+    return reply.code(400).send({ error: "Missing required fields: filename, configId, clientInfo" });
+  }
+  
+  // Validate client info
+  if (!clientInfo.businessId || !clientInfo.name || !clientInfo.country) {
+    return reply.code(400).send({ error: "Missing required client info: businessId, name, country" });
+  }
+  
+  try {
+    // Load MCP configuration
+    const configPath = path.join(configsDir, `config-${configId}.json`);
+    const configContent = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(configContent);
+    
+    if (config.method !== 'MCP') {
+      return reply.code(400).send({ error: "Configuration is not an MCP method" });
+    }
+    
+    // Get timeout from config or use default (60 seconds)
+    const timeoutSeconds = config.timeout || 60;
+    
+    // Process invoice through MCP
+    const result = await mcpProcessor.processInvoice(filename, configId, config.url, clientInfo, timeoutSeconds);
+    
+    return {
+      success: true,
+      processingId: result.id,
+      result: result.result,
+      duration: result.duration,
+      timestamp: result.completedAt
+    };
+  } catch (error: any) {
+    return reply.code(500).send({ 
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+app.get("/results/:id", async (req, reply) => {
+  const id = (req.params as any).id as string;
+  
+  try {
+    const result = await mcpProcessor.getResult(id);
+    if (!result) {
+      return reply.code(404).send({ error: "Processing result not found" });
+    }
+    
+    return { result };
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message });
+  }
+});
+
+app.get("/results/filename/:filename", async (req, reply) => {
+  const filename = (req.params as any).filename as string;
+  
+  try {
+    const results = await mcpProcessor.getResultsByFilename(filename);
+    return { results };
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message });
+  }
+});
+
+app.get("/results", async (req, reply) => {
+  try {
+    const results = await mcpProcessor.getAllResults();
+    return { results };
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message });
+  }
+});
+
+app.delete("/results/:id", async (req, reply) => {
+  const id = (req.params as any).id as string;
+  
+  try {
+    const success = await mcpProcessor.deleteResult(id);
+    if (!success) {
+      return reply.code(404).send({ error: "Processing result not found" });
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message });
   }
 });
 
