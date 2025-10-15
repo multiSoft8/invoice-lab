@@ -5,6 +5,19 @@ export async function listProviders() {
 }
 
 export async function parseInvoice(providerId: string, file: File) {
+  // Client-side file size validation (50MB limit)
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File size (${Math.round(file.size / 1024)}KB) exceeds the maximum allowed size of ${Math.round(MAX_FILE_SIZE / 1024 / 1024)}MB`);
+  }
+  
+  // Client-side file type validation
+  const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'];
+  const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+  if (!allowedTypes.includes(fileExt)) {
+    throw new Error(`File type ${fileExt} is not allowed. Supported types: ${allowedTypes.join(', ')}`);
+  }
+  
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("http://localhost:4000/parse", {
@@ -12,16 +25,47 @@ export async function parseInvoice(providerId: string, file: File) {
     body: fd,
     headers: { "X-Provider-Id": providerId },
   });
-  if (!res.ok) throw new Error(await res.text());
+  
+  if (!res.ok) {
+    try {
+      const errorData = await res.json();
+      throw new Error(errorData.message || errorData.error || await res.text());
+    } catch {
+      throw new Error(`Parse failed with status ${res.status}: ${res.statusText}`);
+    }
+  }
+  
   return res.json();
 }
 
 export async function uploadFile(file: File) {
+  // Client-side file size validation (50MB limit)
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File size (${Math.round(file.size / 1024)}KB) exceeds the maximum allowed size of ${Math.round(MAX_FILE_SIZE / 1024 / 1024)}MB`);
+  }
+  
+  // Client-side file type validation
+  const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'];
+  const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+  if (!allowedTypes.includes(fileExt)) {
+    throw new Error(`File type ${fileExt} is not allowed. Supported types: ${allowedTypes.join(', ')}`);
+  }
+  
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("http://localhost:4000/upload", { method: "POST", body: fd });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<{ ok: true; path: string; filename: string }>;
+  
+  if (!res.ok) {
+    try {
+      const errorData = await res.json();
+      throw new Error(errorData.message || errorData.error || await res.text());
+    } catch {
+      throw new Error(`Upload failed with status ${res.status}: ${res.statusText}`);
+    }
+  }
+  
+  return res.json() as Promise<{ ok: true; path: string; filename: string; size: number; sizeFormatted: string }>;
 }
 
 export async function listFiles() {

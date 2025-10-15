@@ -16,6 +16,15 @@ export default function FileUploader() {
   const resizeStartMouse = useRef<{ x: number; y: number } | null>(null);
   const resizeStartSize = useRef<{ width: number; height: number } | null>(null);
 
+  // Helper function to format file sizes
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
   useEffect(() => {
     function onMove(e: MouseEvent) {
       if (!isResizing || !resizeStartMouse.current || !resizeStartSize.current) return;
@@ -51,7 +60,28 @@ export default function FileUploader() {
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? []);
+    
+    // Validate file sizes and types
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'];
+    
+    for (const file of picked) {
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`File "${file.name}" is too large (${Math.round(file.size / 1024)}KB). Maximum size is ${Math.round(MAX_FILE_SIZE / 1024 / 1024)}MB.`);
+        setFiles([]);
+        return;
+      }
+      
+      const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!allowedTypes.includes(fileExt)) {
+        setError(`File "${file.name}" has unsupported type ${fileExt}. Supported types: ${allowedTypes.join(', ')}.`);
+        setFiles([]);
+        return;
+      }
+    }
+    
     setFiles(picked);
+    setError(null);
   }
 
   async function onUpload() {
@@ -61,7 +91,8 @@ export default function FileUploader() {
       for (const f of files) {
         await uploadFile(f);
       }
-      setMessage(`${files.length} file(s) uploaded to local storage`);
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      setMessage(`${files.length} file(s) uploaded successfully (${formatFileSize(totalSize)} total)`);
       setFiles([]);
       await refreshList();
     } catch (e: any) {
@@ -91,6 +122,10 @@ export default function FileUploader() {
 
         {showControls && (
           <div className="mt-3 space-y-3">
+            {/* File upload info */}
+            <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded border">
+              <strong>Upload limits:</strong> Maximum file size: 50MB. Supported formats: PDF, PNG, JPG, JPEG, GIF, BMP, TIFF, TIF
+            </div>
             <div className="flex items-center gap-3">
               <input
                 id="file-input"
@@ -122,8 +157,41 @@ export default function FileUploader() {
                 </svg>
                 <span>{uploading ? 'Uploading…' : 'Upload to local storage'}</span>
               </button>
-              {files.length>0 && <span className="text-sm opacity-75">{files.length} selected</span>}
+              {files.length>0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm opacity-75">{files.length} selected</span>
+                  <div className="text-xs text-gray-600">
+                    Total size: {formatFileSize(files.reduce((sum, file) => sum + file.size, 0))}
+                  </div>
+                </div>
+              )}
             </div>
+            
+            {/* Show selected files with details */}
+            {files.length > 0 && (
+              <div className="mt-3 p-3 bg-gray-50 rounded border">
+                <h4 className="text-sm font-medium mb-2">Selected Files:</h4>
+                <div className="space-y-2 max-h-32 overflow-auto">
+                  {files.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate" title={file.name}>{file.name}</div>
+                        <div className="text-gray-600">{formatFileSize(file.size)}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newFiles = files.filter((_, i) => i !== index);
+                          setFiles(newFiles);
+                        }}
+                        className="text-red-600 hover:text-red-800 text-xs px-2 py-1"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

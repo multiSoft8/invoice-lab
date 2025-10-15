@@ -13,9 +13,22 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = Fastify({ logger: true });
+const app = Fastify({ 
+  logger: true,
+  bodyLimit: CONFIG.maxFileSize // Set Fastify body limit to match file size limit
+});
 app.register(cors, { origin: true });
-app.register(multipart);
+app.register(multipart, {
+  limits: {
+    fileSize: CONFIG.maxFileSize, // 50MB file size limit
+    files: CONFIG.maxFiles, // Maximum number of files
+    fieldSize: 1024 * 1024, // 1MB field size limit
+    fields: 10, // Maximum number of fields
+    parts: CONFIG.maxFiles * 2 // Maximum number of parts (files + fields)
+  },
+  attachFieldsToBody: false,
+  sharedSchemaId: 'MultipartFileType'
+});
 
 // Initialize MCP processor
 const resultsDir = path.resolve(__dirname, "../../data/results");
@@ -26,30 +39,112 @@ app.get("/health", async () => ({ ok: true }));
 app.get("/providers", async () => ({ providers: listProviders() }));
 
 app.post("/parse", async (req, reply) => {
-  const mp = await (req as any).file();
-  const providerId = (req as any).headers["x-provider-id"] as string | undefined;
-  if (!providerId) return reply.code(400).send({ error: "Missing X-Provider-Id header" });
-  if (!mp) return reply.code(400).send({ error: "Expected multipart/form-data with a file field" });
+  try {
+    const mp = await (req as any).file();
+    const providerId = (req as any).headers["x-provider-id"] as string | undefined;
+    if (!providerId) return reply.code(400).send({ error: "Missing X-Provider-Id header" });
+    if (!mp) return reply.code(400).send({ error: "Expected multipart/form-data with a file field" });
 
-  // Save file to local data dir for reproducibility
-  const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
-  await fs.mkdir(uploadDir, { recursive: true });
-  const filePath = path.join(uploadDir, mp.filename);
-  await fs.writeFile(filePath, await mp.toBuffer());
+    // Validate file size
+    const fileBuffer = await mp.toBuffer();
+    if (fileBuffer.length > CONFIG.maxFileSize) {
+      return reply.code(413).send({ 
+        error: "File too large", 
+        message: `File size (${Math.round(fileBuffer.length / 1024)}KB) exceeds the maximum allowed size of ${Math.round(CONFIG.maxFileSize / 1024 / 1024)}MB`,
+        maxSize: CONFIG.maxFileSize,
+        actualSize: fileBuffer.length
+      });
+    }
+    
+    // Validate file type
+    const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'];
+    const fileExt = path.extname(mp.filename).toLowerCase();
+    if (!allowedTypes.includes(fileExt)) {
+      return reply.code(400).send({ 
+        error: "Invalid file type", 
+        message: `File type ${fileExt} is not allowed. Supported types: ${allowedTypes.join(', ')}`,
+        allowedTypes
+      });
+    }
 
-  const provider = await getProvider(providerId);
-  const result = await provider.parse({ kind: "file", path: filePath });
-  return { providerId, result };
+    // Save file to local data dir for reproducibility
+    const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+    await fs.mkdir(uploadDir, { recursive: true });
+    const filePath = path.join(uploadDir, mp.filename);
+    await fs.writeFile(filePath, fileBuffer);
+
+    const provider = await getProvider(providerId);
+    const result = await provider.parse({ kind: "file", path: filePath });
+    return { 
+      providerId, 
+      result,
+      fileInfo: {
+        filename: mp.filename,
+        size: fileBuffer.length,
+        sizeFormatted: `${Math.round(fileBuffer.length / 1024)}KB`
+      }
+    };
+  } catch (error: any) {
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+      return reply.code(413).send({ 
+        error: "File too large", 
+        message: `File exceeds the maximum allowed size of ${Math.round(CONFIG.maxFileSize / 1024 / 1024)}MB`,
+        maxSize: CONFIG.maxFileSize
+      });
+    }
+    return reply.code(500).send({ error: "Parse failed", message: error.message });
+  }
 });
 
 app.post("/upload", async (req, reply) => {
-  const mp = await (req as any).file();
-  if (!mp) return reply.code(400).send({ error: "Expected multipart/form-data with a file field" });
-  const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
-  await fs.mkdir(uploadDir, { recursive: true });
-  const filePath = path.join(uploadDir, mp.filename);
-  await fs.writeFile(filePath, await mp.toBuffer());
-  return { ok: true, path: filePath, filename: mp.filename };
+  try {
+    const mp = await (req as any).file();
+    if (!mp) return reply.code(400).send({ error: "Expected multipart/form-data with a file field" });
+    
+    // Validate file size
+    const fileBuffer = await mp.toBuffer();
+    if (fileBuffer.length > CONFIG.maxFileSize) {
+      return reply.code(413).send({ 
+        error: "File too large", 
+        message: `File size (${Math.round(fileBuffer.length / 1024)}KB) exceeds the maximum allowed size of ${Math.round(CONFIG.maxFileSize / 1024 / 1024)}MB`,
+        maxSize: CONFIG.maxFileSize,
+        actualSize: fileBuffer.length
+      });
+    }
+    
+    // Validate file type
+    const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'];
+    const fileExt = path.extname(mp.filename).toLowerCase();
+    if (!allowedTypes.includes(fileExt)) {
+      return reply.code(400).send({ 
+        error: "Invalid file type", 
+        message: `File type ${fileExt} is not allowed. Supported types: ${allowedTypes.join(', ')}`,
+        allowedTypes
+      });
+    }
+    
+    const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+    await fs.mkdir(uploadDir, { recursive: true });
+    const filePath = path.join(uploadDir, mp.filename);
+    await fs.writeFile(filePath, fileBuffer);
+    
+    return { 
+      ok: true, 
+      path: filePath, 
+      filename: mp.filename,
+      size: fileBuffer.length,
+      sizeFormatted: `${Math.round(fileBuffer.length / 1024)}KB`
+    };
+  } catch (error: any) {
+    if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+      return reply.code(413).send({ 
+        error: "File too large", 
+        message: `File exceeds the maximum allowed size of ${Math.round(CONFIG.maxFileSize / 1024 / 1024)}MB`,
+        maxSize: CONFIG.maxFileSize
+      });
+    }
+    return reply.code(500).send({ error: "Upload failed", message: error.message });
+  }
 });
 
 app.get("/files", async () => {
