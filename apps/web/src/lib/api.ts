@@ -242,3 +242,37 @@ export async function clearClientInfo() {
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<{ ok: boolean }>;
 }
+
+// API Processing
+export interface APIProcessRequest {
+  filename: string;
+  configId: string;
+}
+
+export interface APIProcessResponse {
+  success: boolean;
+  taskId: string;
+  result?: any;
+  error?: string;
+  filename: string;
+  configName: string;
+}
+
+export async function processInvoiceWithAPI(request: APIProcessRequest): Promise<APIProcessResponse> {
+  const res = await fetch("http://localhost:4000/process-api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  
+  if (!res.ok) {
+    try {
+      const errorData = await res.json();
+      throw new Error(errorData.error || await res.text());
+    } catch {
+      throw new Error(`API processing failed with status ${res.status}: ${res.statusText}`);
+    }
+  }
+  
+  return res.json() as Promise<APIProcessResponse>;
+}

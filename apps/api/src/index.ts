@@ -8,6 +8,7 @@ import { CONFIG } from "./config";
 import { listProviders, getProvider } from "./providers";
 import { MCPProcessor } from "./mcp-processor";
 import { ClientInfo } from "./mcp-client";
+import { ChaintrustClient } from "./chaintrust-client";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -699,6 +700,80 @@ app.delete("/results/:id", async (req, reply) => {
     return { success: true };
   } catch (error: any) {
     return reply.code(500).send({ error: error.message });
+  }
+});
+
+// API Processing endpoints
+app.post("/process-api", async (req, reply) => {
+  const body = req.body as any;
+  const { filename, configId } = body;
+  
+  if (!filename || !configId) {
+    return reply.code(400).send({ error: "Missing required fields: filename, configId" });
+  }
+  
+  try {
+    // Load configuration
+    const configPath = path.join(configsDir, `config-${configId}.json`);
+    const configContent = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(configContent);
+    
+    if (config.method !== 'API') {
+      return reply.code(400).send({ error: "Configuration is not an API method" });
+    }
+    
+    // Read the invoice file
+    const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+    const filePath = path.join(uploadDir, filename);
+    const fileData = await fs.readFile(filePath);
+    
+    // Initialize Chaintrust client
+    const chaintrustClient = new ChaintrustClient(config.url, config.apiKey);
+    
+    // Step 1: POST to /invoice/extract
+    const extractResponse = await chaintrustClient.extractInvoice(fileData, filename);
+    
+    // Step 2: Poll for results with exponential backoff
+    const result = await chaintrustClient.pollForResults(extractResponse.task_id);
+    
+    // Check if the result is a timeout response
+    if (result.status === 'timeout') {
+      return {
+        success: false,
+        status: 'timeout',
+        message: result.message,
+        taskId: extractResponse.task_id,
+        filename: filename,
+        configName: config.name,
+        attempts: result.attempts
+      };
+    }
+    
+    // Return success with result
+    return {
+      success: true,
+      taskId: extractResponse.task_id,
+      result: result,
+      filename: filename,
+      configName: config.name
+    };
+    
+  } catch (error: any) {
+    // Check if it's a Chaintrust API error (like 401 Unauthorized)
+    if (error.message.includes('Chaintrust API error')) {
+      return reply.code(400).send({ 
+        success: false,
+        error: error.message,
+        filename: filename
+      });
+    }
+    
+    // For other errors, return 500
+    return reply.code(500).send({ 
+      success: false,
+      error: error.message,
+      filename: filename
+    });
   }
 });
 

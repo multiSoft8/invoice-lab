@@ -1,8 +1,9 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { listFiles, getConfigs, ProcessingConfig, processInvoiceWithMCP, ClientInfo, ProcessingResult, getClientInfo } from '../lib/api';
+import { listFiles, getConfigs, ProcessingConfig, processInvoiceWithMCP, processInvoiceWithAPI, ClientInfo, ProcessingResult, getClientInfo } from '../lib/api';
 import ClientInfoForm from './ClientInfoForm';
 import ResultDetailModal from './ResultDetailModal';
+import SideBySideModal from './SideBySideModal';
 
 export default function CompareOutputs() {
   const [invoices, setInvoices] = useState<string[]>([]);
@@ -17,9 +18,28 @@ export default function CompareOutputs() {
   const resizeStartMouse = useRef<{ x: number; y: number } | null>(null);
   const resizeStartSize = useRef<{ width: number; height: number } | null>(null);
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [processingStates, setProcessingStates] = useState<Record<string, Record<string, 'idle' | 'processing' | 'completed' | 'error'>>>({});
+  const [processingStates, setProcessingStates] = useState<Record<string, Record<string, 'idle' | 'processing' | 'completed' | 'error' | 'timeout'>>>({});
   const [processingResults, setProcessingResults] = useState<Record<string, Record<string, ProcessingResult>>>({});
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
+  
+  // SideBySide modal state
+  const [sideBySideModal, setSideBySideModal] = useState<{
+    isOpen: boolean;
+    filename: string;
+    configId: string;
+    configName: string;
+    configMethod: string;
+    processingResult: ProcessingResult | null;
+    processingState: 'idle' | 'processing' | 'completed' | 'error';
+  }>({
+    isOpen: false,
+    filename: '',
+    configId: '',
+    configName: '',
+    configMethod: '',
+    processingResult: null,
+    processingState: 'idle'
+  });
 
   // Load invoices, configurations, and client info
   useEffect(() => {
@@ -166,8 +186,87 @@ export default function CompareOutputs() {
           } else {
             throw new Error(response.error || 'MCP processing failed');
           }
+        } else if (config.method === 'API') {
+          // NEW: Handle API methods (like Chaintrust)
+          const response = await processInvoiceWithAPI({
+            filename,
+            configId
+          });
+          
+          if (response.success) {
+            // Create processing result for API
+            const result: ProcessingResult = {
+              id: `api-${response.taskId}`,
+              filename,
+              configId,
+              clientInfo: { businessId: '', name: '', country: '' },
+              status: 'completed',
+              result: response.result,
+              createdAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              duration: 0
+            };
+            
+            // Update states
+            setProcessingStates(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: 'completed'
+              }
+            }));
+            
+            setProcessingResults(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: result
+              }
+            }));
+            
+          } else if (response.status === 'timeout') {
+            // Handle timeout gracefully - show a message instead of error
+            console.log(`API processing timeout for ${filename}: ${response.message}`);
+            
+            // Create a timeout result
+            const timeoutResult: ProcessingResult = {
+              id: `api-timeout-${response.taskId}`,
+              filename,
+              configId,
+              clientInfo: { businessId: '', name: '', country: '' },
+              status: 'timeout',
+              result: {
+                message: response.message,
+                taskId: response.taskId,
+                attempts: response.attempts
+              },
+              createdAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              duration: 0
+            };
+            
+            // Update states to show timeout
+            setProcessingStates(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: 'timeout'
+              }
+            }));
+            
+            setProcessingResults(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: timeoutResult
+              }
+            }));
+            
+          } else {
+            throw new Error(response.error || 'API processing failed');
+          }
         } else {
-          // For non-MCP methods, just log for now
+          // For LLM methods, keep existing simulation
           console.log(`Processing ${filename} with ${config.method} method:`, config.name);
           
           // Simulate processing for non-MCP methods
@@ -203,7 +302,7 @@ export default function CompareOutputs() {
   }
 
   // Get processing state for a specific invoice and method
-  function getProcessingState(filename: string, configId: string): 'idle' | 'processing' | 'completed' | 'error' {
+  function getProcessingState(filename: string, configId: string): 'idle' | 'processing' | 'completed' | 'error' | 'timeout' {
     return processingStates[filename]?.[configId] || 'idle';
   }
 
@@ -226,6 +325,19 @@ export default function CompareOutputs() {
   // Handle viewing result details
   function handleViewResult(resultId: string) {
     setSelectedResultId(resultId);
+  }
+
+  // Handle opening SideBySide modal
+  function handleSideBySideView(filename: string, config: ProcessingConfig, processingResult: ProcessingResult) {
+    setSideBySideModal({
+      isOpen: true,
+      filename,
+      configId: config.id,
+      configName: config.name,
+      configMethod: config.method,
+      processingResult,
+      processingState: 'completed'
+    });
   }
 
   // Get file type for display and preview
@@ -454,6 +566,14 @@ export default function CompareOutputs() {
                                       Error
                                     </div>
                                   )}
+                                  {processingState === 'timeout' && (
+                                    <div className="flex items-center justify-center gap-1 text-yellow-600">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                        <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clipRule="evenodd" />
+                                      </svg>
+                                      Timeout
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               
@@ -467,18 +587,53 @@ export default function CompareOutputs() {
                                 </div>
                               )}
                               
-                              {/* View Results Link */}
+                              {/* Result Actions */}
                               {processingState === 'completed' && processingResult && (
-                                <button
-                                  onClick={() => handleViewResult(processingResult.id)}
-                                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded px-1 py-0.5"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
-                                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-                                    <path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 0 1 0-1.113ZM17.25 12a5.25 5.25 0 1 1-10.5 0 5.25 5.25 0 0 1 10.5 0Z" clipRule="evenodd" />
-                                  </svg>
-                                  View Results
-                                </button>
+                                <div className="space-y-1">
+                                  {/* Side-by-Side View Button */}
+                                  <button
+                                    onClick={() => handleSideBySideView(filename, config, processingResult)}
+                                    className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-800 hover:underline focus:outline-none focus:ring-2 focus:ring-green-400 rounded px-1 py-0.5"
+                                    title="View invoice and results side-by-side"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                      <path d="M11.644 1.59a.75.75 0 0 1 .712 0l9.75 5.25a.75.75 0 0 1 0 1.32l-9.75 5.25a.75.75 0 0 1-.712 0l-9.75-5.25a.75.75 0 0 1 0-1.32l9.75-5.25Z" />
+                                      <path d="m3.265 10.602 7.668 4.129a2.25 2.25 0 0 0 2.134 0l7.668-4.13 1.37.739a.75.75 0 0 1 0 1.32l-9.75 5.25a.75.75 0 0 1-.71 0l-9.75-5.25a.75.75 0 0 1 0-1.32l1.37-.738Z" />
+                                      <path d="m10.933 19.231-7.668-4.13-1.37.739a.75.75 0 0 0 0 1.32l9.75 5.25c.221.12.489.12.71 0l9.75-5.25a.75.75 0 0 0 0-1.32l-1.37-.738-7.668 4.13a2.25 2.25 0 0 1-2.134-.001Z" />
+                                    </svg>
+                                    Side-by-Side
+                                  </button>
+                                  
+                                  {/* JSON View Button */}
+                                  <button
+                                    onClick={() => handleViewResult(processingResult.id)}
+                                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded px-1 py-0.5"
+                                    title="View JSON results only"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                                      <path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 0 1 0-1.113ZM17.25 12a5.25 5.25 0 1 1-10.5 0 5.25 5.25 0 0 1 10.5 0Z" clipRule="evenodd" />
+                                    </svg>
+                                    JSON View
+                                  </button>
+                                </div>
+                              )}
+                              
+                              {/* Timeout Actions */}
+                              {processingState === 'timeout' && processingResult && (
+                                <div className="space-y-1">
+                                  {/* Show Timeout Message Button */}
+                                  <button
+                                    onClick={() => handleViewResult(processingResult.id)}
+                                    className="inline-flex items-center gap-1 text-xs text-yellow-600 hover:text-yellow-800 hover:underline focus:outline-none focus:ring-2 focus:ring-yellow-400 rounded px-1 py-0.5"
+                                    title="View timeout details"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
+                                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.231 2.306 1.491l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.231-2.307-1.491l.708-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0 1.5 1.5 1.5 0 0 1 0 3 .75.75 0 0 0 0 1.5 3 3 0 0 0 0-6Z" clipRule="evenodd" />
+                                    </svg>
+                                    View Details
+                                  </button>
+                                </div>
                               )}
                               
                               {/* View Error Details Link */}
@@ -579,6 +734,18 @@ export default function CompareOutputs() {
       <ResultDetailModal 
         resultId={selectedResultId}
         onClose={() => setSelectedResultId(null)}
+      />
+
+      {/* Side-by-Side Modal */}
+      <SideBySideModal
+        filename={sideBySideModal.filename}
+        configId={sideBySideModal.configId}
+        configName={sideBySideModal.configName}
+        configMethod={sideBySideModal.configMethod}
+        processingResult={sideBySideModal.processingResult}
+        processingState={sideBySideModal.processingState}
+        isOpen={sideBySideModal.isOpen}
+        onClose={() => setSideBySideModal(prev => ({ ...prev, isOpen: false }))}
       />
     </div>
   );
