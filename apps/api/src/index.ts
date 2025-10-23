@@ -9,10 +9,16 @@ import { listProviders, getProvider } from "./providers";
 import { MCPProcessor } from "./mcp-processor";
 import { ClientInfo } from "./mcp-client";
 import { ChaintrustClient } from "./chaintrust-client";
+import { SmartScanClient } from "./smartscan-client";
+import { ResultStorage } from "./result-storage";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize result storage
+const resultsDir = path.resolve(__dirname, "../../data/results");
+const resultStorage = new ResultStorage(resultsDir);
 
 const app = Fastify({ 
   logger: true,
@@ -32,7 +38,6 @@ app.register(multipart, {
 });
 
 // Initialize MCP processor
-const resultsDir = path.resolve(__dirname, "../../data/results");
 const mcpProcessor = new MCPProcessor(resultsDir, path.resolve(__dirname, CONFIG.uploadDir));
 
 app.get("/health", async () => ({ ok: true }));
@@ -382,71 +387,135 @@ app.delete("/client-info", async (req, reply) => {
 });
 
 // Connection test functions
-async function testLLMConnection(apiKey: string): Promise<{ success: boolean; error?: string; details?: any }> {
+async function testLLMConnection(url: string): Promise<{ success: boolean; error?: string; details?: any }> {
   try {
-    const response = await fetch('https://api.openai.com/v1/models', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      signal: AbortSignal.timeout(10000) // 10 second timeout
-    });
+    // Test basic connectivity without authentication
+    const endpoints = ['/', '/health', '/status'];
     
-    if (response.ok) {
-      return { success: true, details: { statusCode: response.status } };
-    } else {
-      return { 
-        success: false, 
-        error: `OpenAI API error: ${response.status} ${response.statusText}`,
-        details: { statusCode: response.status, errorType: 'auth' }
-      };
+    for (const endpoint of endpoints) {
+      try {
+        const testUrl = url.endsWith('/') ? `${url}${endpoint.slice(1)}` : `${url}${endpoint}`;
+        
+        const response = await fetch(testUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
+        
+        if (response.ok || response.status === 404) {
+          // Service is reachable (404 means endpoint doesn't exist but service is running)
+          return { 
+            success: true, 
+            details: { 
+              statusCode: response.status, 
+              endpoint: endpoint,
+              message: 'Service is reachable and running'
+            } 
+          };
+        }
+      } catch (endpointError) {
+        // Continue to next endpoint
+        continue;
+      }
     }
+    
+    // If no endpoint responded successfully, try a simple HEAD request
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok || response.status === 404) {
+        return { 
+          success: true, 
+          details: { 
+            statusCode: response.status,
+            message: 'Service is reachable and running'
+          } 
+        };
+      }
+    } catch (headError) {
+      // Fall through to error handling
+    }
+    
+    return { 
+      success: false, 
+      error: 'Service is not reachable or not responding',
+      details: { errorType: 'connectivity' }
+    };
   } catch (error: any) {
     if (error.name === 'TimeoutError') {
       return { success: false, error: 'Request timeout', details: { errorType: 'timeout' } };
+    }
+    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      return { success: false, error: 'Service unavailable', details: { errorType: 'network' } };
     }
     return { success: false, error: error.message, details: { errorType: 'network' } };
   }
 }
 
-async function testAPIConnection(url: string, apiKey?: string): Promise<{ success: boolean; error?: string; details?: any }> {
+async function testAPIConnection(url: string): Promise<{ success: boolean; error?: string; details?: any }> {
   try {
-    // Try health endpoint first, fallback to root
-    const healthUrl = url.endsWith('/') ? `${url}health` : `${url}/health`;
+    // Test basic connectivity without authentication
+    const endpoints = ['/', '/health', '/status'];
     
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
+    for (const endpoint of endpoints) {
+      try {
+        const testUrl = url.endsWith('/') ? `${url}${endpoint.slice(1)}` : `${url}${endpoint}`;
+        
+        const response = await fetch(testUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
+        
+        if (response.ok || response.status === 404) {
+          // Service is reachable (404 means endpoint doesn't exist but service is running)
+          return { 
+            success: true, 
+            details: { 
+              statusCode: response.status, 
+              endpoint: endpoint,
+              message: 'Service is reachable and running'
+            } 
+          };
+        }
+      } catch (endpointError) {
+        // Continue to next endpoint
+        continue;
+      }
     }
     
-    let response = await fetch(healthUrl, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(5000) // 5 second timeout
-    });
-    
-    // If health endpoint fails, try root
-    if (!response.ok && response.status === 404) {
-      response = await fetch(url, {
+    // If no endpoint responded successfully, try a simple HEAD request
+    try {
+      const response = await fetch(url, {
         method: 'HEAD',
-        headers,
         signal: AbortSignal.timeout(5000)
       });
+      
+      if (response.ok || response.status === 404) {
+        return { 
+          success: true, 
+          details: { 
+            statusCode: response.status,
+            message: 'Service is reachable and running'
+          } 
+        };
+      }
+    } catch (headError) {
+      // Fall through to error handling
     }
     
-    if (response.ok) {
-      return { success: true, details: { statusCode: response.status } };
-    } else {
-      return { 
-        success: false, 
-        error: `API error: ${response.status} ${response.statusText}`,
-        details: { statusCode: response.status, errorType: 'auth' }
-      };
-    }
+    return { 
+      success: false, 
+      error: 'Service is not reachable or not responding',
+      details: { errorType: 'connectivity' }
+    };
   } catch (error: any) {
     if (error.name === 'TimeoutError') {
       return { success: false, error: 'Request timeout', details: { errorType: 'timeout' } };
@@ -580,10 +649,10 @@ app.post("/configs/:id/test-connection", async (req, reply) => {
     // Execute test based on method
     switch (config.method) {
       case 'LLM':
-        result = await testLLMConnection(config.apiKey);
+        result = await testLLMConnection(config.url);
         break;
       case 'API':
-        result = await testAPIConnection(config.url, config.apiKey);
+        result = await testAPIConnection(config.url);
         break;
       case 'MCP':
         result = await testMCPConnection(config.url);
@@ -703,6 +772,87 @@ app.delete("/results/:id", async (req, reply) => {
   }
 });
 
+// Statistics endpoint
+app.get("/statistics", async (req, reply) => {
+  try {
+    // Get upload directory
+    const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+    
+    // Get all files
+    const files = await fs.readdir(uploadDir);
+    const invoiceFiles = files.filter(file => 
+      ['.pdf', '.png', '.jpg', '.jpeg'].includes(path.extname(file).toLowerCase())
+    );
+
+    // Get all results
+    const allResults = await mcpProcessor.getAllResults();
+    
+    // Get all configs
+    const configFiles = await fs.readdir(configsDir);
+    const configs = [];
+    for (const file of configFiles) {
+      if (file.endsWith('.json')) {
+        const content = await fs.readFile(path.join(configsDir, file), 'utf8');
+        configs.push(JSON.parse(content));
+      }
+    }
+
+    // Build statistics
+    const statistics = await Promise.all(invoiceFiles.map(async (filename) => {
+      const filePath = path.join(uploadDir, filename);
+      const stats = await fs.stat(filePath);
+      
+      const latestScans: Record<string, any> = {};
+      
+      // Initialize all methods as 'not_scanned'
+      configs.forEach(config => {
+        latestScans[config.id] = {
+          configName: config.name,
+          method: config.method,
+          status: 'not_scanned',
+          lastScanAt: null,
+          result: null,
+          error: null
+        };
+      });
+
+      // Find latest results for this invoice
+      const invoiceResults = allResults.filter(result => result.filename === filename);
+      
+      // Group by configId and find latest
+      const resultsByConfig = invoiceResults.reduce((acc, result) => {
+        if (!acc[result.configId] || new Date(result.createdAt) > new Date(acc[result.configId].createdAt)) {
+          acc[result.configId] = result;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      // Update latest scans
+      Object.entries(resultsByConfig).forEach(([configId, result]) => {
+        if (latestScans[configId]) {
+          latestScans[configId] = {
+            configName: configs.find(c => c.id === configId)?.name || 'Unknown',
+            method: configs.find(c => c.id === configId)?.method || 'Unknown',
+            status: result.status,
+            lastScanAt: result.createdAt,
+            result: result.result,
+            error: result.error
+          };
+        }
+      });
+
+      return {
+        filename,
+        latestScans
+      };
+    }));
+
+    return { statistics };
+  } catch (error: any) {
+    return reply.code(500).send({ error: error.message });
+  }
+});
+
 // API Processing endpoints
 app.post("/process-api", async (req, reply) => {
   const body = req.body as any;
@@ -722,12 +872,107 @@ app.post("/process-api", async (req, reply) => {
       return reply.code(400).send({ error: "Configuration is not an API method" });
     }
     
+    // Check if this is SmartSCan (by name) or regular API
+    console.log(`\n🔍 Configuration Detection:`);
+    console.log(`📝 Config Name: "${config.name}"`);
+    console.log(`🔧 Config Method: "${config.method}"`);
+    const isSmartScan = config.name === 'SmartSCan';
+    console.log(`🎯 Is SmartSCan: ${isSmartScan}`);
+    
     // Read the invoice file
     const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
     const filePath = path.join(uploadDir, filename);
     const fileData = await fs.readFile(filePath);
     
+    if (isSmartScan) {
+      // Handle SmartSCan processing
+      console.log(`\n=== SmartSCan API Endpoint Processing ===`);
+      console.log(`📄 Processing file: ${filename}`);
+      console.log(`🔧 Config ID: ${configId}`);
+      console.log(`🏷️  Config Name: ${config.name}`);
+      console.log(`🔗 Config URL: ${config.url}`);
+      console.log(`🔑 Config API Key: ${config.apiKey ? `${config.apiKey.substring(0, 8)}...${config.apiKey.substring(config.apiKey.length - 4)}` : 'NOT SET'}`);
+      console.log(`📊 File size: ${fileData.length} bytes`);
+      
+      console.log(`\n📋 Initializing SmartSCan client...`);
+      const smartScanClient = new SmartScanClient(config.url, config.apiKey);
+      console.log(`✅ SmartSCan client initialized`);
+      
+      console.log(`\n📋 Calling SmartSCan processDocument method...`);
+      const result = await smartScanClient.processDocument(fileData, filename);
+      console.log(`✅ SmartSCan processing completed`);
+      
+      // Create enhanced result with summary
+      console.log(`\n📋 Creating enhanced result with summary...`);
+      const summary = smartScanClient.getExtractionSummary(result);
+      console.log(`📊 Summary:`, {
+        totalFields: summary.totalFields,
+        extractedFields: summary.extractedFields.length,
+        highConfidenceFields: summary.highConfidenceFields,
+        extractionRate: Math.round((summary.extractedFields.length / summary.totalFields) * 100),
+        missingFieldsCount: summary.missingFields.length
+      });
+      
+      const enhancedResult = {
+        ...result,
+        summary: {
+          totalFields: summary.totalFields,
+          extractedFields: summary.extractedFields.length,
+          highConfidenceFields: summary.highConfidenceFields,
+          extractionRate: Math.round((summary.extractedFields.length / summary.totalFields) * 100),
+          missingFields: summary.missingFields
+        },
+        processedAt: new Date().toISOString(),
+        filename: filename
+      };
+      console.log(`✅ Enhanced result created`);
+      
+      // Store the result
+      console.log(`\n📋 Preparing result for storage...`);
+      const resultId = `smartscan-${result.feedbackId}`;
+      const processingResult = {
+        id: resultId,
+        filename: filename,
+        configId: configId,
+        clientInfo: { businessId: '', name: '', country: '' },
+        status: 'completed',
+        result: enhancedResult,
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        duration: 0
+      };
+      console.log(`📝 Result ID: ${resultId}`);
+      console.log(`📊 Result size: ${JSON.stringify(processingResult).length} characters`);
+      
+      console.log(`\n📋 Storing result in database...`);
+      await resultStorage.saveResult(processingResult);
+      console.log(`✅ Result stored successfully`);
+      
+      // Return success
+      console.log(`\n📋 Preparing success response...`);
+      const response = {
+        success: true,
+        feedbackId: result.feedbackId,
+        result: enhancedResult,
+        filename: filename,
+        configName: config.name,
+        resultId: resultId
+      };
+      console.log(`✅ Success response prepared`);
+      console.log(`\n=== SmartSCan API Endpoint Processing Completed ===`);
+      console.log(`📄 File: ${filename}`);
+      console.log(`🆔 Feedback ID: ${result.feedbackId}`);
+      console.log(`📊 Extraction Rate: ${enhancedResult.summary.extractionRate}%`);
+      console.log(`💾 Result ID: ${resultId}`);
+      
+      return response;
+    }
+    
     // Initialize Chaintrust client
+    console.log(`\n=== Chaintrust API Endpoint Processing ===`);
+    console.log(`📄 Processing file: ${filename}`);
+    console.log(`🔧 Config ID: ${configId}`);
+    console.log(`🏷️  Config Name: ${config.name}`);
     const chaintrustClient = new ChaintrustClient(config.url, config.apiKey);
     
     // Step 1: POST to /invoice/extract
@@ -759,8 +1004,26 @@ app.post("/process-api", async (req, reply) => {
     };
     
   } catch (error: any) {
-    // Check if it's a Chaintrust API error (like 401 Unauthorized)
+    console.log(`\n❌ === API Processing Error ===`);
+    console.log(`📄 File: ${filename}`);
+    console.log(`🔧 Config ID: ${configId}`);
+    console.log(`🚨 Error Type: ${error.name || 'Unknown'}`);
+    console.log(`📝 Error Message: ${error.message}`);
+    console.log(`📊 Error Stack:`, error.stack);
+    
+    // Check if it's a SmartSCan API error
+    if (error.message.includes('SmartSCan API error')) {
+      console.log(`🔍 Detected SmartSCan API error - returning 400 Bad Request`);
+      return reply.code(400).send({ 
+        success: false,
+        error: error.message,
+        filename: filename
+      });
+    }
+    
+    // Check if it's a Chaintrust API error
     if (error.message.includes('Chaintrust API error')) {
+      console.log(`🔍 Detected Chaintrust API error - returning 400 Bad Request`);
       return reply.code(400).send({ 
         success: false,
         error: error.message,
@@ -769,6 +1032,191 @@ app.post("/process-api", async (req, reply) => {
     }
     
     // For other errors, return 500
+    console.log(`🔍 Detected internal error - returning 500 Internal Server Error`);
+    return reply.code(500).send({ 
+      success: false,
+      error: error.message,
+      filename: filename
+    });
+  }
+});
+
+// SmartSCan Processing endpoint
+app.post("/process-smartscan", async (req, reply) => {
+  const body = req.body as any;
+  const { filename, configId } = body;
+  
+  if (!filename || !configId) {
+    return reply.code(400).send({ error: "Missing required fields: filename, configId" });
+  }
+  
+  try {
+    // Load configuration
+    const configPath = path.join(configsDir, `config-${configId}.json`);
+    const configContent = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(configContent);
+    
+    if (config.method !== 'API') {
+      return reply.code(400).send({ error: "Configuration is not an API method" });
+    }
+    
+    // Check if this is SmartSCan (by name) or regular API
+    console.log(`\n🔍 Configuration Detection:`);
+    console.log(`📝 Config Name: "${config.name}"`);
+    console.log(`🔧 Config Method: "${config.method}"`);
+    const isSmartScan = config.name === 'SmartSCan';
+    console.log(`🎯 Is SmartSCan: ${isSmartScan}`);
+    
+    // Read the invoice file
+    const uploadDir = path.resolve(__dirname, CONFIG.uploadDir);
+    const filePath = path.join(uploadDir, filename);
+    const fileData = await fs.readFile(filePath);
+    
+    console.log(`\n🎯 Decision Point: isSmartScan = ${isSmartScan}`);
+    if (isSmartScan) {
+      console.log(`\n=== SmartSCan API Endpoint Processing ===`);
+      console.log(`📄 Processing file: ${filename}`);
+      console.log(`🔧 Config ID: ${configId}`);
+      console.log(`🏷️  Config Name: ${config.name}`);
+      console.log(`🔗 Config URL: ${config.url}`);
+      console.log(`🔑 Config API Key: ${config.apiKey.substring(0, 8)}...${config.apiKey.substring(config.apiKey.length - 4)}`);
+      console.log(`📊 File size: ${fileData.length} bytes`);
+      
+      // Handle SmartSCan processing
+      console.log(`\n📋 Initializing SmartSCan client...`);
+      const smartScanClient = new SmartScanClient(config.url, config.apiKey);
+      console.log(`✅ SmartSCan client initialized`);
+      
+      // Process document
+      console.log(`\n📋 Calling SmartSCan processDocument method...`);
+      const result = await smartScanClient.processDocument(fileData, filename);
+      console.log(`✅ SmartSCan processing completed`);
+      
+      // Create enhanced result with summary
+      console.log(`\n📋 Creating enhanced result with summary...`);
+      const summary = smartScanClient.getExtractionSummary(result);
+      console.log(`📊 Summary:`, {
+        totalFields: summary.totalFields,
+        extractedFields: summary.extractedFields.length,
+        highConfidenceFields: summary.highConfidenceFields,
+        extractionRate: Math.round((summary.extractedFields.length / summary.totalFields) * 100),
+        missingFieldsCount: summary.missingFields.length
+      });
+      
+      const enhancedResult = {
+        ...result,
+        summary: {
+          totalFields: summary.totalFields,
+          extractedFields: summary.extractedFields.length,
+          highConfidenceFields: summary.highConfidenceFields,
+          extractionRate: Math.round((summary.extractedFields.length / summary.totalFields) * 100),
+          missingFields: summary.missingFields
+        },
+        processedAt: new Date().toISOString(),
+        filename: filename
+      };
+      console.log(`✅ Enhanced result created`);
+      
+      // Store the result in the result storage system
+      console.log(`\n📋 Preparing result for storage...`);
+      const resultId = `smartscan-${result.feedbackId}`;
+      const processingResult = {
+        id: resultId,
+        filename: filename,
+        configId: configId,
+        clientInfo: { businessId: '', name: '', country: '' },
+        status: 'completed',
+        result: enhancedResult,
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        duration: 0
+      };
+      console.log(`📝 Result ID: ${resultId}`);
+      console.log(`📊 Result size: ${JSON.stringify(processingResult).length} characters`);
+      
+      // Store the result
+      console.log(`\n📋 Storing result in database...`);
+      await resultStorage.saveResult(processingResult);
+      console.log(`✅ Result stored successfully`);
+      
+      // Return success with enhanced result
+      console.log(`\n📋 Preparing success response...`);
+      const response = {
+        success: true,
+        feedbackId: result.feedbackId,
+        result: enhancedResult,
+        filename: filename,
+        configName: config.name,
+        resultId: resultId
+      };
+      console.log(`✅ Success response prepared`);
+      console.log(`\n=== SmartSCan API Endpoint Processing Completed ===`);
+      console.log(`📄 File: ${filename}`);
+      console.log(`🆔 Feedback ID: ${result.feedbackId}`);
+      console.log(`📊 Extraction Rate: ${enhancedResult.summary.extractionRate}%`);
+      console.log(`💾 Result ID: ${resultId}`);
+      
+      return response;
+    } else {
+      console.log(`\n=== Chaintrust API Endpoint Processing ===`);
+      console.log(`📄 Processing file: ${filename}`);
+      console.log(`🔧 Config ID: ${configId}`);
+      console.log(`🏷️  Config Name: ${config.name}`);
+      console.log(`🔗 Config URL: ${config.url}`);
+      console.log(`🔑 Config API Key: ${config.apiKey.substring(0, 8)}...${config.apiKey.substring(config.apiKey.length - 4)}`);
+      
+      // Handle regular API processing (Chaintrust)
+      const chaintrustClient = new ChaintrustClient(config.url, config.apiKey);
+      
+      // Step 1: POST to /invoice/extract
+      const extractResponse = await chaintrustClient.extractInvoice(fileData, filename);
+      
+      // Step 2: Poll for results with exponential backoff
+      const result = await chaintrustClient.pollForResults(extractResponse.task_id);
+      
+      // Check if the result is a timeout response
+      if (result.status === 'timeout') {
+        return {
+          success: false,
+          status: 'timeout',
+          message: result.message,
+          taskId: extractResponse.task_id,
+          filename: filename,
+          configName: config.name,
+          attempts: result.attempts
+        };
+      }
+      
+      // Return success with result
+      return {
+        success: true,
+        taskId: extractResponse.task_id,
+        result: result,
+        filename: filename,
+        configName: config.name
+      };
+    }
+    
+  } catch (error: any) {
+    console.log(`\n❌ === SmartSCan Processing Error ===`);
+    console.log(`📄 File: ${filename}`);
+    console.log(`🔧 Config ID: ${configId}`);
+    console.log(`🚨 Error Type: ${error.name || 'Unknown'}`);
+    console.log(`📝 Error Message: ${error.message}`);
+    console.log(`📊 Error Stack:`, error.stack);
+    
+    // Check if it's a SmartSCan API error (like 401 Unauthorized)
+    if (error.message.includes('SmartSCan API error')) {
+      console.log(`🔍 Detected SmartSCan API error - returning 400 Bad Request`);
+      return reply.code(400).send({ 
+        success: false,
+        error: error.message,
+        filename: filename
+      });
+    }
+    
+    // For other errors, return 500
+    console.log(`🔍 Detected internal error - returning 500 Internal Server Error`);
     return reply.code(500).send({ 
       success: false,
       error: error.message,

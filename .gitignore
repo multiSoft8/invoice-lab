@@ -1,4 +1,5 @@
 node_modules
+pnpm-lock.yaml
 .DS_Store
 .env
 .env.local
@@ -29,4 +30,3 @@ apps/data/*
 apps/web/.turbo/turbo-dev.log
 apps/apps/.turbo/turbo-dev.log
 apps/api/.turbo/turbo-dev.log
-pnpm-lock.yaml

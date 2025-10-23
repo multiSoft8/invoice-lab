@@ -273,7 +273,7 @@ export default function ProcessingMethod() {
                       <th className="text-left font-semibold p-3">API Key</th>
                       <th className="text-left font-semibold p-3">URL</th>
                       <th className="text-center font-semibold p-3">Timeout</th>
-                      <th className="text-center font-semibold p-3">Integration Basic Test OK</th>
+                      <th className="text-center font-semibold p-3">Connectivity Test</th>
                       <th className="text-right font-semibold p-3">Actions</th>
                     </tr>
                   </thead>
@@ -315,14 +315,14 @@ export default function ProcessingMethod() {
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Testing...
+                                Testing Connectivity...
                               </>
                             ) : testResults[config.id]?.success ? (
                               <>
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
                                   <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
                                 </svg>
-                                Connected
+                                Reachable
                               </>
                             ) : testResults[config.id]?.success === false ? (
                               <>
@@ -336,7 +336,7 @@ export default function ProcessingMethod() {
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3">
                                   <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" />
                                 </svg>
-                                Test Connection
+                                Test Connectivity
                               </>
                             )}
                           </button>

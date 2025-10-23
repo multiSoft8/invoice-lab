@@ -107,7 +107,7 @@ export class ChaintrustClient {
   }
   
   async pollForResults(taskId: string): Promise<any> {
-    const maxAttempts = 10;
+    const maxAttempts = 15; // 50% increase from 10 to 15
     const baseDelayMs = 3000; // 3 seconds base delay
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {

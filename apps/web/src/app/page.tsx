@@ -2,6 +2,7 @@
 import FileUploader from "../components/FileUploader";
 import ProcessingMethod from "../components/ProcessingMethod";
 import CompareOutputs from "../components/CompareOutputs";
+import StatisticsTable from "../components/StatisticsTable";
 import { useState } from "react";
 
 export default function Page() {
@@ -50,7 +51,7 @@ export default function Page() {
         )}
       </section>
 
-      {/* 4) Scanning section (placeholder) */}
+      {/* 4) Scanning & Statistics section */}
       <section className="rounded border p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Scanning & Statistics</h2>
@@ -59,7 +60,7 @@ export default function Page() {
           </button>
         </div>
         {open.scan && (
-          <p className="text-sm opacity-75">This area will show extracted fields, metrics, and processing statistics.</p>
+          <StatisticsTable />
         )}
       </section>
     </main>

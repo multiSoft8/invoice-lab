@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { listFiles, getConfigs, ProcessingConfig, processInvoiceWithMCP, processInvoiceWithAPI, ClientInfo, ProcessingResult, getClientInfo } from '../lib/api';
+import { listFiles, getConfigs, ProcessingConfig, processInvoiceWithMCP, processInvoiceWithAPI, processInvoiceWithSmartScan, ClientInfo, ProcessingResult, getClientInfo } from '../lib/api';
 import ClientInfoForm from './ClientInfoForm';
 import ResultDetailModal from './ResultDetailModal';
 import SideBySideModal from './SideBySideModal';
@@ -265,8 +265,48 @@ export default function CompareOutputs() {
           } else {
             throw new Error(response.error || 'API processing failed');
           }
+        } else if (config.method === 'API' && config.name === 'SmartSCan') {
+          // NEW: Handle SmartSCan processing via API endpoint
+          const response = await processInvoiceWithAPI({
+            filename,
+            configId
+          });
+          
+          if (response.success) {
+            // Create processing result for SmartSCan
+            const result: ProcessingResult = {
+              id: response.resultId || `smartscan-${response.feedbackId}`,
+              filename,
+              configId,
+              clientInfo: { businessId: '', name: '', country: '' },
+              status: 'completed',
+              result: response.result,
+              createdAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              duration: 0
+            };
+            
+            // Update states
+            setProcessingStates(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: 'completed'
+              }
+            }));
+            
+            setProcessingResults(prev => ({
+              ...prev,
+              [filename]: {
+                ...prev[filename],
+                [configId]: result
+              }
+            }));
+          } else {
+            throw new Error(response.error || 'SmartSCan processing failed');
+          }
         } else {
-          // For LLM methods, keep existing simulation
+          // For other LLM methods, keep existing simulation
           console.log(`Processing ${filename} with ${config.method} method:`, config.name);
           
           // Simulate processing for non-MCP methods
