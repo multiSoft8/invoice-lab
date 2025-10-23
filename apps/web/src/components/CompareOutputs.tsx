@@ -8,7 +8,7 @@ import SideBySideModal from './SideBySideModal';
 export default function CompareOutputs() {
   const [invoices, setInvoices] = useState<string[]>([]);
   const [configs, setConfigs] = useState<ProcessingConfig[]>([]);
-  const [selectedMethods, setSelectedMethods] = useState<Record<string, string[]>>({});
+  const [selectedMethods, setSelectedMethods] = useState<Record<string, string | null>>({});
   const [showTable, setShowTable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +61,9 @@ export default function CompareOutputs() {
         }
         
         // Initialize selected methods for each invoice
-        const initialSelections: Record<string, string[]> = {};
+        const initialSelections: Record<string, string | null> = {};
         filesResponse.files.forEach(filename => {
-          initialSelections[filename] = [];
+          initialSelections[filename] = null;
         });
         setSelectedMethods(initialSelections);
       } catch (e: any) {
@@ -97,19 +97,20 @@ export default function CompareOutputs() {
     };
   }, [isResizing]);
 
-  // Handle method selection for a specific invoice
+  // Handle method selection for a specific invoice (single selection)
   function handleMethodSelection(filename: string, configId: string, isSelected: boolean) {
     setSelectedMethods(prev => {
-      const current = prev[filename] || [];
       if (isSelected) {
+        // Select this method and deselect any previously selected method
         return {
           ...prev,
-          [filename]: [...current, configId]
+          [filename]: configId
         };
       } else {
+        // Deselect the method
         return {
           ...prev,
-          [filename]: current.filter(id => id !== configId)
+          [filename]: null
         };
       }
     });
@@ -117,228 +118,260 @@ export default function CompareOutputs() {
 
   // Handle process invoice button click
   async function handleProcessInvoice(filename: string) {
-    const selected = selectedMethods[filename] || [];
-    if (selected.length === 0) {
-      alert('Please select at least one processing method');
+    const selectedConfigId = selectedMethods[filename];
+    if (!selectedConfigId) {
+      alert('Please select a processing method');
       return;
     }
     
-    // Check if any MCP methods are selected and client info is required
-    const mcpConfigs = configs.filter(config => config.method === 'MCP' && selected.includes(config.id));
-    if (mcpConfigs.length > 0 && !clientInfo) {
+    // Check if MCP method is selected and client info is required
+    const selectedConfig = configs.find(config => config.id === selectedConfigId);
+    if (selectedConfig?.method === 'MCP' && !clientInfo) {
       alert('Client information is required for MCP processing. Please fill in the client information form.');
       return;
     }
     
-    // Process each selected method
-    for (const configId of selected) {
-      const config = configs.find(c => c.id === configId);
-      if (!config) continue;
+    // Process the selected method
+    const config = selectedConfig!;
+    
+    // Set processing state
+    setProcessingStates(prev => ({
+      ...prev,
+      [filename]: {
+        ...prev[filename],
+        [config.id]: 'processing'
+      }
+    }));
+    
+    try {
+      if (config.method === 'MCP') {
+        // Process with MCP
+        const response = await processInvoiceWithMCP({
+          filename,
+          configId: config.id,
+          clientInfo: clientInfo!
+        });
+        
+        if (response.success) {
+          // Create processing result
+          const result: ProcessingResult = {
+            id: response.processingId,
+            filename,
+            configId: config.id,
+            clientInfo: clientInfo!,
+            status: 'completed',
+            result: response.result,
+            createdAt: new Date().toISOString(),
+            completedAt: response.timestamp,
+            duration: response.duration
+          };
+          
+          // Update states
+          setProcessingStates(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: 'completed'
+            }
+          }));
+          
+          setProcessingResults(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: result
+            }
+          }));
+        } else {
+          throw new Error(response.error || 'MCP processing failed');
+        }
+      } else if (config.method === 'API') {
+        // Handle API methods (like Chaintrust)
+        const response = await processInvoiceWithAPI({
+          filename,
+          configId: config.id
+        });
+        
+        if (response.success) {
+          // Create processing result for API
+          const result: ProcessingResult = {
+            id: `api-${response.taskId}`,
+            filename,
+            configId: config.id,
+            clientInfo: { businessId: '', name: '', country: '' },
+            status: 'completed',
+            result: response.result,
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            duration: 0
+          };
+          
+          // Update states
+          setProcessingStates(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: 'completed'
+            }
+          }));
+          
+          setProcessingResults(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: result
+            }
+          }));
+          
+        } else if (response.status === 'timeout') {
+          // Handle timeout gracefully - show a message instead of error
+          console.log(`API processing timeout for ${filename}: ${response.message}`);
+          
+          // Create a timeout result
+          const timeoutResult: ProcessingResult = {
+            id: `api-timeout-${response.taskId}`,
+            filename,
+            configId: config.id,
+            clientInfo: { businessId: '', name: '', country: '' },
+            status: 'timeout',
+            result: {
+              message: response.message,
+              taskId: response.taskId,
+              attempts: response.attempts
+            },
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            duration: 0
+          };
+          
+          // Update states to show timeout
+          setProcessingStates(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: 'timeout'
+            }
+          }));
+          
+          setProcessingResults(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: timeoutResult
+            }
+          }));
+          
+        } else {
+          throw new Error(response.error || 'API processing failed');
+        }
+      } else if (config.method === 'API' && config.name === 'SmartSCan') {
+        // Handle SmartSCan processing via new async approach
+        const response = await processInvoiceWithSmartScan({
+          filename,
+          configId: config.id
+        });
+        
+        if (response.success) {
+          // Create processing result for SmartSCan
+          const result: ProcessingResult = {
+            id: response.resultId || `smartscan-${response.transactionId}`,
+            filename,
+            configId: config.id,
+            clientInfo: { businessId: '', name: '', country: '' },
+            status: 'completed',
+            result: response.result,
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            duration: 0
+          };
+          
+          // Update states
+          setProcessingStates(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: 'completed'
+            }
+          }));
+          
+          setProcessingResults(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: result
+            }
+          }));
+        } else if (response.status === 'timeout') {
+          // Handle timeout gracefully
+          console.log(`SmartSCan processing timeout for ${filename}: ${response.message}`);
+          
+          const timeoutResult: ProcessingResult = {
+            id: `smartscan-timeout-${response.transactionId}`,
+            filename,
+            configId: config.id,
+            clientInfo: { businessId: '', name: '', country: '' },
+            status: 'timeout',
+            result: {
+              message: response.message,
+              transactionId: response.transactionId,
+              attempts: response.attempts
+            },
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            duration: 0
+          };
+          
+          setProcessingStates(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: 'timeout'
+            }
+          }));
+          
+          setProcessingResults(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: timeoutResult
+            }
+          }));
+        } else {
+          throw new Error(response.error || 'SmartSCan processing failed');
+        }
+      } else {
+        // For other LLM methods, keep existing simulation
+        console.log(`Processing ${filename} with ${config.method} method:`, config.name);
+        
+        // Simulate processing for non-MCP methods
+        setTimeout(() => {
+          setProcessingStates(prev => ({
+            ...prev,
+            [filename]: {
+              ...prev[filename],
+              [config.id]: 'completed'
+            }
+          }));
+        }, 2000);
+      }
+    } catch (error: any) {
+      console.error(`Error processing ${filename} with ${config.name}:`, error);
       
-      // Set processing state
       setProcessingStates(prev => ({
         ...prev,
         [filename]: {
           ...prev[filename],
-          [configId]: 'processing'
+          [config.id]: 'error'
         }
       }));
       
-      try {
-        if (config.method === 'MCP') {
-          // Process with MCP
-          const response = await processInvoiceWithMCP({
-            filename,
-            configId,
-            clientInfo: clientInfo!
-          });
-          
-          if (response.success) {
-            // Create processing result
-            const result: ProcessingResult = {
-              id: response.processingId,
-              filename,
-              configId,
-              clientInfo: clientInfo!,
-              status: 'completed',
-              result: response.result,
-              createdAt: new Date().toISOString(),
-              completedAt: response.timestamp,
-              duration: response.duration
-            };
-            
-            // Update states
-            setProcessingStates(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: 'completed'
-              }
-            }));
-            
-            setProcessingResults(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: result
-              }
-            }));
-          } else {
-            throw new Error(response.error || 'MCP processing failed');
-          }
-        } else if (config.method === 'API') {
-          // NEW: Handle API methods (like Chaintrust)
-          const response = await processInvoiceWithAPI({
-            filename,
-            configId
-          });
-          
-          if (response.success) {
-            // Create processing result for API
-            const result: ProcessingResult = {
-              id: `api-${response.taskId}`,
-              filename,
-              configId,
-              clientInfo: { businessId: '', name: '', country: '' },
-              status: 'completed',
-              result: response.result,
-              createdAt: new Date().toISOString(),
-              completedAt: new Date().toISOString(),
-              duration: 0
-            };
-            
-            // Update states
-            setProcessingStates(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: 'completed'
-              }
-            }));
-            
-            setProcessingResults(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: result
-              }
-            }));
-            
-          } else if (response.status === 'timeout') {
-            // Handle timeout gracefully - show a message instead of error
-            console.log(`API processing timeout for ${filename}: ${response.message}`);
-            
-            // Create a timeout result
-            const timeoutResult: ProcessingResult = {
-              id: `api-timeout-${response.taskId}`,
-              filename,
-              configId,
-              clientInfo: { businessId: '', name: '', country: '' },
-              status: 'timeout',
-              result: {
-                message: response.message,
-                taskId: response.taskId,
-                attempts: response.attempts
-              },
-              createdAt: new Date().toISOString(),
-              completedAt: new Date().toISOString(),
-              duration: 0
-            };
-            
-            // Update states to show timeout
-            setProcessingStates(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: 'timeout'
-              }
-            }));
-            
-            setProcessingResults(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: timeoutResult
-              }
-            }));
-            
-          } else {
-            throw new Error(response.error || 'API processing failed');
-          }
-        } else if (config.method === 'API' && config.name === 'SmartSCan') {
-          // NEW: Handle SmartSCan processing via API endpoint
-          const response = await processInvoiceWithAPI({
-            filename,
-            configId
-          });
-          
-          if (response.success) {
-            // Create processing result for SmartSCan
-            const result: ProcessingResult = {
-              id: response.resultId || `smartscan-${response.feedbackId}`,
-              filename,
-              configId,
-              clientInfo: { businessId: '', name: '', country: '' },
-              status: 'completed',
-              result: response.result,
-              createdAt: new Date().toISOString(),
-              completedAt: new Date().toISOString(),
-              duration: 0
-            };
-            
-            // Update states
-            setProcessingStates(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: 'completed'
-              }
-            }));
-            
-            setProcessingResults(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: result
-              }
-            }));
-          } else {
-            throw new Error(response.error || 'SmartSCan processing failed');
-          }
-        } else {
-          // For other LLM methods, keep existing simulation
-          console.log(`Processing ${filename} with ${config.method} method:`, config.name);
-          
-          // Simulate processing for non-MCP methods
-          setTimeout(() => {
-            setProcessingStates(prev => ({
-              ...prev,
-              [filename]: {
-                ...prev[filename],
-                [configId]: 'completed'
-              }
-            }));
-          }, 2000);
-        }
-      } catch (error: any) {
-        console.error(`Error processing ${filename} with ${config.name}:`, error);
-        
-        setProcessingStates(prev => ({
-          ...prev,
-          [filename]: {
-            ...prev[filename],
-            [configId]: 'error'
-          }
-        }));
-        
-        setError(`Failed to process ${filename} with ${config.name}: ${error.message}`);
-      }
+      setError(`Failed to process ${filename} with ${config.name}: ${error.message}`);
     }
   }
 
   // Check if any methods are selected for an invoice
   function hasSelectedMethods(filename: string): boolean {
-    return (selectedMethods[filename] || []).length > 0;
+    return selectedMethods[filename] !== null && selectedMethods[filename] !== undefined;
   }
 
   // Get processing state for a specific invoice and method
@@ -351,10 +384,12 @@ export default function CompareOutputs() {
     return processingResults[filename]?.[configId] || null;
   }
 
-  // Check if any MCP methods are selected
+  // Check if MCP method is selected
   function hasMCPMethodsSelected(filename: string): boolean {
-    const selected = selectedMethods[filename] || [];
-    return configs.some(config => config.method === 'MCP' && selected.includes(config.id));
+    const selectedConfigId = selectedMethods[filename];
+    if (!selectedConfigId) return false;
+    const selectedConfig = configs.find(config => config.id === selectedConfigId);
+    return selectedConfig?.method === 'MCP';
   }
 
   // Handle invoice preview click
@@ -429,9 +464,9 @@ export default function CompareOutputs() {
       }
       
       // Initialize selected methods for each invoice
-      const initialSelections: Record<string, string[]> = {};
+      const initialSelections: Record<string, string | null> = {};
       filesResponse.files.forEach(filename => {
-        initialSelections[filename] = selectedMethods[filename] || [];
+        initialSelections[filename] = selectedMethods[filename] || null;
       });
       setSelectedMethods(initialSelections);
     } catch (e: any) {
@@ -567,13 +602,14 @@ export default function CompareOutputs() {
                         return (
                           <td key={config.id} className="p-3 text-center">
                             <div className="space-y-2">
-                              {/* Selection checkbox */}
+                              {/* Selection radio button */}
                               <label className="inline-flex items-center">
                                 <input
-                                  type="checkbox"
-                                  checked={(selectedMethods[filename] || []).includes(config.id)}
+                                  type="radio"
+                                  name={`method-${filename}`}
+                                  checked={selectedMethods[filename] === config.id}
                                   onChange={(e) => handleMethodSelection(filename, config.id, e.target.checked)}
-                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  className="border-gray-300 text-blue-600 focus:ring-blue-500"
                                 />
                                 <span className="ml-2 text-xs text-gray-600">Select</span>
                               </label>

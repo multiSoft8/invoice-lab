@@ -292,7 +292,8 @@ export interface InvoiceStatistics {
   };
 }
 
-// SmartSCan API
+
+// SmartSCan API - New Async Transaction-based Approach
 export interface SmartScanProcessRequest {
   filename: string;
   configId: string;
@@ -300,174 +301,19 @@ export interface SmartScanProcessRequest {
 
 export interface SmartScanProcessResponse {
   success: boolean;
-  feedbackId: string;
-  result?: {
-    feedbackId: string;
-    answers: {
-      orderDate?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      paymentDueDate?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      currency?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      totalVat?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      totalInclVat?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      totalExclVat?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      supplierCorporateId?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      supplierCountryCode?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      documentType?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      paymentMethod?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      invoiceNumber?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      documentNumber?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      documentDate?: Array<{
-        value: string;
-        text?: string;
-        confidence: { level: string };
-        boundingBox?: {
-          vertices: Array<{ x: number; y: number }>;
-          normalizedVertices: Array<{ x: number; y: number }>;
-        };
-        pageRef: number;
-        modelMetadata: { modelName: string; modelVer: string };
-      }>;
-      // Additional fields that might be present
-      [key: string]: any;
-    };
-    summary: {
-      totalFields: number;
-      extractedFields: number;
-      highConfidenceFields: number;
-      extractionRate: number;
-      missingFields: string[];
-    };
-    processedAt: string;
-    filename: string;
-  };
+  transactionId?: string;
+  result?: any;
   error?: string;
   filename: string;
   configName: string;
   resultId?: string;
+  status?: 'timeout';
+  message?: string;
+  attempts?: number;
 }
 
 export async function processInvoiceWithSmartScan(request: SmartScanProcessRequest): Promise<SmartScanProcessResponse> {
-  const res = await fetch("http://localhost:4000/process-smartscan", {
+  const res = await fetch("http://localhost:4000/process-api", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
@@ -486,7 +332,6 @@ export async function processInvoiceWithSmartScan(request: SmartScanProcessReque
 }
 
 export async function getStatistics(): Promise<{ statistics: InvoiceStatistics[] }> {
-  console.log('Making API call to http://localhost:4000/statistics');
   const res = await fetch("http://localhost:4000/statistics", { cache: "no-store" });
   console.log('API response status:', res.status, res.statusText);
   if (!res.ok) {
